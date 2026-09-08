@@ -1,9 +1,15 @@
---[[ 
+--[[
     ====================================================================
-    SYSTEM: VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.1 (INPUT SLIDERS)
+    SYSTEM: VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.2
     ENVIRONMENT: Client-Side (LocalScript / Executor)
     DEFAULT TOGGLE KEY: RightControl
-    UPDATED: Sliders agora possuem caixa de texto interativa para digitação manual!
+    UPDATED:
+      - Mouse livre ao abrir o painel
+      - Mouse preso ao fechar
+      - FOV/Aimbot corrigidos para primeira pessoa
+      - Melhor limpeza de ESP
+      - Melhor gerenciamento de respawn
+      - Restauração de valores originais
     ====================================================================
 --]]
 
@@ -13,21 +19,25 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Camera = workspace.CurrentCamera
 
--- Limpeza de instâncias legadas
-if PlayerGui:FindFirstChild("ArchitectSuiteUI") then
-    PlayerGui.ArchitectSuiteUI:Destroy()
+-- ====================================================================
+-- LIMPEZA DE INSTÂNCIAS LEGADAS
+-- ====================================================================
+
+local oldUI = PlayerGui:FindFirstChild("ArchitectSuiteUI")
+if oldUI then
+    oldUI:Destroy()
 end
 
 -- ====================================================================
--- ESTADO GLOBAL & TEMA DINÂMICO
+-- ESTADO GLOBAL
 -- ====================================================================
+
 local TOGGLE_KEY = Enum.KeyCode.RightControl
 local ListeningForKey = false
 
@@ -37,78 +47,100 @@ local Theme = {
     Sidebar = Color3.fromRGB(14, 15, 21),
     Card = Color3.fromRGB(20, 22, 30),
     CardHover = Color3.fromRGB(26, 28, 38),
-    Accent = Color3.fromRGB(138, 92, 246), -- Purple Accent Default
+    Accent = Color3.fromRGB(138, 92, 246),
     Text = Color3.fromRGB(243, 244, 246),
     SubText = Color3.fromRGB(156, 163, 175),
     CornerRadius = UDim.new(0, 8)
 }
 
 local State = {
-    -- Player & Physics
+    -- Player
     SpeedEnabled = false,
     WalkSpeed = 120,
+
     JumpEnabled = false,
     JumpPower = 150,
+
     InfJump = false,
     GodMode = false,
     ClickTP = false,
     BhopEnabled = false,
+
     HipHeightEnabled = false,
     HipHeightValue = 2,
-    
-    -- Movement & Flight
+
+    -- Movement
     FlyEnabled = false,
     FlySpeed = 80,
+
     NoclipEnabled = false,
+
     LowGravity = false,
     GravityValue = 50,
+
     BlinkEnabled = false,
+
     SpinbotEnabled = false,
     SpinSpeed = 20,
-    
-    -- Visuals & ESP
+
+    -- Visual
     ESPEnabled = false,
     ESPBoxes = true,
     ESPNames = true,
     ESPHealth = true,
     ESPTracers = false,
+
     Fullbright = false,
     FOVEnabled = false,
     FOVValue = 90,
+
     NoFog = false,
     CrosshairEnabled = false,
     XrayEnabled = false,
-    
-    -- Combat & Aim
+
+    -- Combat
     HitboxEnabled = false,
     HitboxSize = 10,
+
     AimbotEnabled = false,
     AimbotSmoothness = 0.2,
     AimbotFOV = 150,
     ShowFOVCircle = false,
+
     AimPart = "Head",
+
     Triggerbot = false,
 
-    -- World / Utilities / Waypoints
+    -- Server / Utils
     AntiAFK = true,
     ShiftLockOverride = false,
+
     Waypoints = {},
-    
-    -- Caches
+
+    -- Original values
     OriginalGravity = workspace.Gravity,
-    OriginalFogEnd = Lighting.FogEnd
+    OriginalFogEnd = Lighting.FogEnd,
+    OriginalAmbient = Lighting.Ambient,
+    OriginalBrightness = Lighting.Brightness,
+    OriginalFieldOfView = Camera.FieldOfView
 }
 
 -- ====================================================================
--- ESTRUTURAS AUXILIARES VISUAIS (FOV CIRCLE & CROSSHAIR)
+-- FOV CIRCLE
 -- ====================================================================
+
 local fovCircle = Drawing.new("Circle")
+
 fovCircle.Thickness = 1.5
 fovCircle.Color = Theme.Accent
 fovCircle.Filled = false
 fovCircle.Transparency = 1
 fovCircle.NumSides = 64
 fovCircle.Visible = false
+
+-- ====================================================================
+-- CROSSHAIR
+-- ====================================================================
 
 local crosshairLines = {
     Top = Drawing.new("Line"),
@@ -125,13 +157,18 @@ for _, line in pairs(crosshairLines) do
 end
 
 -- ====================================================================
--- SISTEMA DE NOTIFICAÇÕES (TOAST NOTIFICATIONS)
+-- GUI PRINCIPAL
 -- ====================================================================
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ArchitectSuiteUI"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = PlayerGui
+
+-- ====================================================================
+-- NOTIFICAÇÕES
+-- ====================================================================
 
 local notificationContainer = Instance.new("Frame")
 notificationContainer.Name = "NotificationContainer"
@@ -185,18 +222,46 @@ local function Notify(titleText, descText)
     dLbl.Parent = card
 
     task.delay(3.5, function()
-        TweenService:Create(card, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(tLbl, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
-        TweenService:Create(dLbl, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
-        TweenService:Create(stroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+        if not card.Parent then
+            return
+        end
+
+        TweenService:Create(
+            card,
+            TweenInfo.new(0.3),
+            {BackgroundTransparency = 1}
+        ):Play()
+
+        TweenService:Create(
+            tLbl,
+            TweenInfo.new(0.3),
+            {TextTransparency = 1}
+        ):Play()
+
+        TweenService:Create(
+            dLbl,
+            TweenInfo.new(0.3),
+            {TextTransparency = 1}
+        ):Play()
+
+        TweenService:Create(
+            stroke,
+            TweenInfo.new(0.3),
+            {Transparency = 1}
+        ):Play()
+
         task.wait(0.3)
-        card:Destroy()
+
+        if card.Parent then
+            card:Destroy()
+        end
     end)
 end
 
 -- ====================================================================
--- ESTRUTURA PRINCIPAL DA INTERFACE (UI ENGINE)
+-- MAIN FRAME
 -- ====================================================================
+
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 650, 0, 460)
@@ -217,7 +282,24 @@ mainStroke.Thickness = 1.2
 mainStroke.Color = Color3.fromRGB(40, 42, 58)
 mainStroke.Parent = mainFrame
 
--- Header
+-- ====================================================================
+-- MOUSE BEHAVIOR
+-- ====================================================================
+
+local function UpdateMouseBehavior()
+    if mainFrame.Visible then
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+    else
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        UserInputService.MouseIconEnabled = false
+    end
+end
+
+-- ====================================================================
+-- HEADER
+-- ====================================================================
+
 local header = Instance.new("Frame")
 header.Name = "Header"
 header.Size = UDim2.new(1, 0, 0, 45)
@@ -229,7 +311,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(0, 350, 1, 0)
 title.Position = UDim2.new(0, 15, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "VOID // ARCHITECT SUITE v4.1"
+title.Text = "VOID // ARCHITECT SUITE v4.2"
 title.TextColor3 = Theme.Accent
 title.TextSize = 13
 title.Font = Enum.Font.GothamBold
@@ -253,9 +335,13 @@ closeCorner.Parent = closeBtn
 
 closeBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
+    UpdateMouseBehavior()
 end)
 
--- Sidebar
+-- ====================================================================
+-- SIDEBAR
+-- ====================================================================
+
 local sidebar = Instance.new("Frame")
 sidebar.Name = "Sidebar"
 sidebar.Size = UDim2.new(0, 145, 1, -45)
@@ -275,7 +361,10 @@ sidebarPadding.PaddingLeft = UDim.new(0, 8)
 sidebarPadding.PaddingRight = UDim.new(0, 8)
 sidebarPadding.Parent = sidebar
 
--- Content Area
+-- ====================================================================
+-- CONTENT AREA
+-- ====================================================================
+
 local contentArea = Instance.new("Frame")
 contentArea.Name = "ContentArea"
 contentArea.Size = UDim2.new(1, -145, 1, -45)
@@ -284,12 +373,14 @@ contentArea.BackgroundTransparency = 1
 contentArea.Parent = mainFrame
 
 -- ====================================================================
--- SISTEMA DE ABAS DINÂMICAS
+-- SISTEMA DE ABAS
 -- ====================================================================
+
 local Tabs = {}
 
 local function CreateTab(name)
     local tabButton = Instance.new("TextButton")
+
     tabButton.Size = UDim2.new(1, 0, 0, 32)
     tabButton.BackgroundColor3 = Theme.Sidebar
     tabButton.BackgroundTransparency = 1
@@ -305,6 +396,7 @@ local function CreateTab(name)
     tabCorner.Parent = tabButton
 
     local tabScroll = Instance.new("ScrollingFrame")
+
     tabScroll.Name = name .. "Tab"
     tabScroll.Size = UDim2.new(1, -20, 1, -20)
     tabScroll.Position = UDim2.new(0, 10, 0, 10)
@@ -322,27 +414,46 @@ local function CreateTab(name)
     listLayout.Parent = tabScroll
 
     listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        tabScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
+        tabScroll.CanvasSize = UDim2.new(
+            0,
+            0,
+            0,
+            listLayout.AbsoluteContentSize.Y + 20
+        )
     end)
 
     tabButton.MouseButton1Click:Connect(function()
         for _, tab in pairs(Tabs) do
             tab.Scroll.Visible = false
-            TweenService:Create(tab.Button, TweenInfo.new(0.2), {
-                BackgroundTransparency = 1,
-                TextColor3 = Theme.SubText
-            }):Play()
+
+            TweenService:Create(
+                tab.Button,
+                TweenInfo.new(0.2),
+                {
+                    BackgroundTransparency = 1,
+                    TextColor3 = Theme.SubText
+                }
+            ):Play()
         end
 
         tabScroll.Visible = true
-        TweenService:Create(tabButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Theme.Card,
-            BackgroundTransparency = 0,
-            TextColor3 = Theme.Accent
-        }):Play()
+
+        TweenService:Create(
+            tabButton,
+            TweenInfo.new(0.2),
+            {
+                BackgroundColor3 = Theme.Card,
+                BackgroundTransparency = 0,
+                TextColor3 = Theme.Accent
+            }
+        ):Play()
     end)
 
-    local tabData = {Button = tabButton, Scroll = tabScroll}
+    local tabData = {
+        Button = tabButton,
+        Scroll = tabScroll
+    }
+
     table.insert(Tabs, tabData)
 
     if #Tabs == 1 then
@@ -356,11 +467,12 @@ local function CreateTab(name)
 end
 
 -- ====================================================================
--- CONSTRUTORES DE ELEMENTOS INTERATIVOS
+-- TOGGLE
 -- ====================================================================
 
 local function AddToggle(parent, titleText, descText, callback)
     local card = Instance.new("Frame")
+
     card.Size = UDim2.new(1, -4, 0, 48)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
@@ -393,6 +505,7 @@ local function AddToggle(parent, titleText, descText, callback)
     descLbl.Parent = card
 
     local toggleBtn = Instance.new("TextButton")
+
     toggleBtn.Size = UDim2.new(0, 36, 0, 18)
     toggleBtn.Position = UDim2.new(1, -44, 0.5, -9)
     toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 42, 58)
@@ -404,6 +517,7 @@ local function AddToggle(parent, titleText, descText, callback)
     toggleCorner.Parent = toggleBtn
 
     local indicator = Instance.new("Frame")
+
     indicator.Size = UDim2.new(0, 12, 0, 12)
     indicator.Position = UDim2.new(0, 3, 0.5, -6)
     indicator.BackgroundColor3 = Color3.fromRGB(180, 180, 200)
@@ -415,22 +529,49 @@ local function AddToggle(parent, titleText, descText, callback)
     indicatorCorner.Parent = indicator
 
     local active = false
+
     toggleBtn.MouseButton1Click:Connect(function()
         active = not active
-        local targetPos = active and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)
-        local targetColor = active and Theme.Accent or Color3.fromRGB(40, 42, 58)
 
-        TweenService:Create(indicator, TweenInfo.new(0.2), {Position = targetPos}):Play()
-        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        local targetPos
+
+        if active then
+            targetPos = UDim2.new(1, -15, 0.5, -6)
+        else
+            targetPos = UDim2.new(0, 3, 0.5, -6)
+        end
+
+        local targetColor
+
+        if active then
+            targetColor = Theme.Accent
+        else
+            targetColor = Color3.fromRGB(40, 42, 58)
+        end
+
+        TweenService:Create(
+            indicator,
+            TweenInfo.new(0.2),
+            {Position = targetPos}
+        ):Play()
+
+        TweenService:Create(
+            toggleBtn,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = targetColor}
+        ):Play()
+
         callback(active)
     end)
 end
 
 -- ====================================================================
--- NOVO SLIDER COM INPUT DIGITÁVEL (TEXTBOX INTEGRADA)
+-- SLIDER
 -- ====================================================================
+
 local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback)
     local card = Instance.new("Frame")
+
     card.Size = UDim2.new(1, -4, 0, 52)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
@@ -451,8 +592,8 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
     titleLbl.Parent = card
 
-    -- Caixa de texto interativa (Agora dá pra digitar!)
     local valInput = Instance.new("TextBox")
+
     valInput.Size = UDim2.new(0, 50, 0, 20)
     valInput.Position = UDim2.new(1, -60, 0, 4)
     valInput.BackgroundColor3 = Color3.fromRGB(30, 32, 44)
@@ -469,6 +610,7 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
     inputCorner.Parent = valInput
 
     local sliderTrack = Instance.new("Frame")
+
     sliderTrack.Size = UDim2.new(1, -20, 0, 5)
     sliderTrack.Position = UDim2.new(0, 10, 0, 34)
     sliderTrack.BackgroundColor3 = Color3.fromRGB(40, 42, 58)
@@ -479,8 +621,11 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
     trackCorner.CornerRadius = UDim.new(1, 0)
     trackCorner.Parent = sliderTrack
 
+    local initialPercent = (defaultVal - minVal) / (maxVal - minVal)
+
     local sliderFill = Instance.new("Frame")
-    sliderFill.Size = UDim2.new((defaultVal - minVal)/(maxVal - minVal), 0, 1, 0)
+
+    sliderFill.Size = UDim2.new(initialPercent, 0, 1, 0)
     sliderFill.BackgroundColor3 = Theme.Accent
     sliderFill.BorderSizePixel = 0
     sliderFill.Parent = sliderTrack
@@ -491,16 +636,43 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
 
     local function SetValue(value)
         local clamped = math.clamp(value, minVal, maxVal)
+
         valInput.Text = tostring(clamped)
-        local percent = (clamped - minVal) / (maxVal - minVal)
-        sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+
+        local percent =
+            (clamped - minVal) /
+            (maxVal - minVal)
+
+        sliderFill.Size = UDim2.new(
+            percent,
+            0,
+            1,
+            0
+        )
+
         callback(clamped)
     end
 
     local dragging = false
+
     local function UpdateFromMouse(input)
-        local pos = math.clamp((input.Position.X - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
-        local value = math.floor(minVal + (maxVal - minVal) * pos)
+        if sliderTrack.AbsoluteSize.X <= 0 then
+            return
+        end
+
+        local pos =
+            (input.Position.X - sliderTrack.AbsolutePosition.X) /
+            sliderTrack.AbsoluteSize.X
+
+        pos = math.clamp(pos, 0, 1)
+
+        local value =
+            math.floor(
+                minVal +
+                (maxVal - minVal) *
+                pos
+            )
+
         SetValue(value)
     end
 
@@ -523,20 +695,24 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
         end
     end)
 
-    -- Atualiza ao terminar de digitar
     valInput.FocusLost:Connect(function()
         local num = tonumber(valInput.Text)
+
         if num then
             SetValue(num)
         else
-            valInput.Text = tostring(minVal)
-            SetValue(minVal)
+            SetValue(defaultVal)
         end
     end)
 end
 
+-- ====================================================================
+-- BUTTON
+-- ====================================================================
+
 local function AddButton(parent, titleText, btnText, callback)
     local card = Instance.new("Frame")
+
     card.Size = UDim2.new(1, -4, 0, 40)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
@@ -547,6 +723,7 @@ local function AddButton(parent, titleText, btnText, callback)
     cardCorner.Parent = card
 
     local titleLbl = Instance.new("TextLabel")
+
     titleLbl.Size = UDim2.new(0.6, 0, 1, 0)
     titleLbl.Position = UDim2.new(0, 10, 0, 0)
     titleLbl.BackgroundTransparency = 1
@@ -558,6 +735,7 @@ local function AddButton(parent, titleText, btnText, callback)
     titleLbl.Parent = card
 
     local actionBtn = Instance.new("TextButton")
+
     actionBtn.Size = UDim2.new(0, 95, 0, 24)
     actionBtn.Position = UDim2.new(1, -105, 0.5, -12)
     actionBtn.BackgroundColor3 = Theme.Accent
@@ -574,8 +752,13 @@ local function AddButton(parent, titleText, btnText, callback)
     actionBtn.MouseButton1Click:Connect(callback)
 end
 
+-- ====================================================================
+-- TEXTBOX
+-- ====================================================================
+
 local function AddTextBox(parent, titleText, placeholderText, callback)
     local card = Instance.new("Frame")
+
     card.Size = UDim2.new(1, -4, 0, 42)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
@@ -586,6 +769,7 @@ local function AddTextBox(parent, titleText, placeholderText, callback)
     cardCorner.Parent = card
 
     local titleLbl = Instance.new("TextLabel")
+
     titleLbl.Size = UDim2.new(0.45, 0, 1, 0)
     titleLbl.Position = UDim2.new(0, 10, 0, 0)
     titleLbl.BackgroundTransparency = 1
@@ -597,6 +781,7 @@ local function AddTextBox(parent, titleText, placeholderText, callback)
     titleLbl.Parent = card
 
     local textBox = Instance.new("TextBox")
+
     textBox.Size = UDim2.new(0.5, -10, 0, 24)
     textBox.Position = UDim2.new(0.5, 0, 0.5, -12)
     textBox.BackgroundColor3 = Color3.fromRGB(30, 32, 44)
@@ -620,8 +805,9 @@ local function AddTextBox(parent, titleText, placeholderText, callback)
 end
 
 -- ====================================================================
--- CRIAÇÃO DAS ABAS DA SUITE v4.1
+-- ABAS
 -- ====================================================================
+
 local tabPlayer = CreateTab("Jogador")
 local tabMovement = CreateTab("Movimento")
 local tabVisuals = CreateTab("Visual & ESP")
@@ -630,152 +816,575 @@ local tabWaypoints = CreateTab("Waypoints")
 local tabServer = CreateTab("Servidor")
 local tabThemes = CreateTab("Configurações")
 
--- --- ABA 1: JOGADOR ---
-AddToggle(tabPlayer, "Super Velocidade", "Aumenta drasticamente a velocidade de caminhada.", function(s)
-    State.SpeedEnabled = s
-    Notify("Velocidade", s and "Ativado" or "Desativado")
-end)
-AddSlider(tabPlayer, "Ajustar Velocidade", 16, 400, State.WalkSpeed, function(v) State.WalkSpeed = v end)
+-- ====================================================================
+-- JOGADOR
+-- ====================================================================
 
-AddToggle(tabPlayer, "Super Pulo", "Permite saltar em alturas elevadas.", function(s) State.JumpEnabled = s end)
-AddSlider(tabPlayer, "Força do Pulo", 50, 500, State.JumpPower, function(v) State.JumpPower = v end)
-
-AddToggle(tabPlayer, "Pulo Infinito", "Permite saltar repetidamente no ar.", function(s) State.InfJump = s end)
-AddToggle(tabPlayer, "Auto Bhop", "Salta automaticamente assim que toca o chão.", function(s) State.BhopEnabled = s end)
-AddToggle(tabPlayer, "God Mode Local", "Refaz a saúde continuamente para evitar mortes.", function(s) State.GodMode = s end)
-
-AddToggle(tabPlayer, "Ajustar HipHeight", "Eleva a altura do seu personagem do chão.", function(s)
-    State.HipHeightEnabled = s
-    if not s and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").HipHeight = 0
+AddToggle(
+    tabPlayer,
+    "Super Velocidade",
+    "Aumenta drasticamente a velocidade de caminhada.",
+    function(s)
+        State.SpeedEnabled = s
+        Notify("Velocidade", s and "Ativado" or "Desativado")
     end
-end)
-AddSlider(tabPlayer, "Altura (HipHeight)", 0, 30, State.HipHeightValue, function(v) State.HipHeightValue = v end)
+)
 
-AddToggle(tabPlayer, "Click Teleport (Ctrl + Clique)", "Teleporta instantaneamente para onde clicar.", function(s) State.ClickTP = s end)
-
--- --- ABA 2: MOVIMENTO ---
-AddToggle(tabMovement, "Modo Voo (Fly)", "Flutue e navegue livremente.", function(s) State.FlyEnabled = s end)
-AddSlider(tabMovement, "Velocidade de Voo", 20, 350, State.FlySpeed, function(v) State.FlySpeed = v end)
-
-AddToggle(tabMovement, "Noclip", "Atravesse estruturas e paredes.", function(s) State.NoclipEnabled = s end)
-AddToggle(tabMovement, "Gravidade Baixa", "Altera a gravidade do workspace.", function(s)
-    State.LowGravity = s
-    if not s then workspace.Gravity = State.OriginalGravity end
-end)
-AddSlider(tabMovement, "Valor da Gravidade", 0, 196, State.GravityValue, function(v) State.GravityValue = v end)
-
-AddToggle(tabMovement, "Blink (Lag Switch)", "Congela seu personagem para outros jogadores.", function(s)
-    State.BlinkEnabled = s
-    Notify("Blink Switch", s and "Ativo (Física Parada)" or "Inativo")
-end)
-
-AddToggle(tabMovement, "Spinbot", "Gira o personagem em alta velocidade (Anti-Aim).", function(s) State.SpinbotEnabled = s end)
-AddSlider(tabMovement, "Velocidade de Rotação", 1, 100, State.SpinSpeed, function(v) State.SpinSpeed = v end)
-
--- --- ABA 3: VISUAL & ESP ---
-AddToggle(tabVisuals, "ESP Master Switch", "Ativa o sistema visual para todos os jogadores.", function(s) State.ESPEnabled = s end)
-AddToggle(tabVisuals, "Highlight Box", "Destaque luminoso em volta do personagem.", function(s) State.ESPBoxes = s end)
-AddToggle(tabVisuals, "ESP Nomes & Distância", "Exibe nome e metros até o jogador.", function(s) State.ESPNames = s end)
-AddToggle(tabVisuals, "ESP Tracers", "Linhas da parte inferior da tela até os alvos.", function(s) State.ESPTracers = s end)
-
-AddToggle(tabVisuals, "Fullbright", "Ilumina todas as áreas escuras do mapa.", function(s)
-    State.Fullbright = s
-    if not s then
-        Lighting.Ambient = Color3.fromRGB(128, 128, 128)
-        Lighting.Brightness = 1
+AddSlider(
+    tabPlayer,
+    "Ajustar Velocidade",
+    16,
+    400,
+    State.WalkSpeed,
+    function(v)
+        State.WalkSpeed = v
     end
-end)
+)
 
-AddToggle(tabVisuals, "Sem Névoa (NoFog)", "Remove neblina do ambiente.", function(s)
-    State.NoFog = s
-    if not s then Lighting.FogEnd = State.OriginalFogEnd end
-end)
-
-AddToggle(tabVisuals, "Mirra Personalizada (Crosshair)", "Desenha uma mira fixa no centro da tela.", function(s) State.CrosshairEnabled = s end)
-
-AddToggle(tabVisuals, "FOV Customizado", "Aumenta o campo de visão da câmera.", function(s)
-    State.FOVEnabled = s
-    if not s then Camera.FieldOfView = 70 end
-end)
-AddSlider(tabVisuals, "Ângulo FOV", 70, 130, State.FOVValue, function(v) State.FOVValue = v end)
-
--- --- ABA 4: COMBATE ---
-AddToggle(tabCombat, "Camera Lock / Aimbot", "Trava a câmera no alvo mais próximo.", function(s) State.AimbotEnabled = s end)
-AddSlider(tabCombat, "Suavidade do Aimbot", 1, 10, math.floor(State.AimbotSmoothness * 10), function(v) State.AimbotSmoothness = v / 10 end)
-
-AddToggle(tabCombat, "Mostrar Círculo FOV", "Exibe o raio de alcance do Aimbot na tela.", function(s) State.ShowFOVCircle = s end)
-AddSlider(tabCombat, "Raio do FOV Aim", 50, 400, State.AimbotFOV, function(v) State.AimbotFOV = v end)
-
-AddButton(tabCombat, "Mudar Alvo do Aim", "Trocar Cabeça/Torso", function()
-    if State.AimPart == "Head" then
-        State.AimPart = "HumanoidRootPart"
-        Notify("Aimbot", "Alvo alterado para: TORSO")
-    else
-        State.AimPart = "Head"
-        Notify("Aimbot", "Alvo alterado para: CABEÇA")
+AddToggle(
+    tabPlayer,
+    "Super Pulo",
+    "Permite saltar em alturas elevadas.",
+    function(s)
+        State.JumpEnabled = s
     end
-end)
+)
 
-AddToggle(tabCombat, "Triggerbot Auto-Click", "Atira automaticamente quando a mira está sobre um inimigo.", function(s) State.Triggerbot = s end)
-
-AddToggle(tabCombat, "Hitbox Extender", "Aumenta a área de acerto nos inimigos.", function(s) State.HitboxEnabled = s end)
-AddSlider(tabCombat, "Tamanho da Hitbox", 2, 40, State.HitboxSize, function(v) State.HitboxSize = v end)
-
--- --- ABA 5: WAYPOINTS ---
-AddTextBox(tabWaypoints, "Novo Waypoint", "Nome do local...", function(text)
-    if text and text ~= "" and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local pos = LocalPlayer.Character.HumanoidRootPart.Position
-        table.insert(State.Waypoints, {Name = text, Position = pos})
-        Notify("Waypoint", "Salvo: " .. text)
+AddSlider(
+    tabPlayer,
+    "Força do Pulo",
+    50,
+    500,
+    State.JumpPower,
+    function(v)
+        State.JumpPower = v
     end
-end)
+)
 
-AddButton(tabWaypoints, "Teleportar p/ Último Waypoint", "Ir", function()
-    if #State.Waypoints > 0 then
-        local last = State.Waypoints[#State.Waypoints]
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(last.Position + Vector3.new(0, 3, 0))
-            Notify("Waypoint", "Teleportado para: " .. last.Name)
+AddToggle(
+    tabPlayer,
+    "Pulo Infinito",
+    "Permite saltar repetidamente no ar.",
+    function(s)
+        State.InfJump = s
+    end
+)
+
+AddToggle(
+    tabPlayer,
+    "Auto Bhop",
+    "Salta automaticamente assim que toca o chão.",
+    function(s)
+        State.BhopEnabled = s
+    end
+)
+
+AddToggle(
+    tabPlayer,
+    "God Mode Local",
+    "Refaz a saúde continuamente para evitar mortes.",
+    function(s)
+        State.GodMode = s
+    end
+)
+
+AddToggle(
+    tabPlayer,
+    "Ajustar HipHeight",
+    "Eleva a altura do personagem.",
+    function(s)
+        State.HipHeightEnabled = s
+
+        if not s and LocalPlayer.Character then
+            local humanoid =
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid then
+                humanoid.HipHeight = 0
+            end
         end
-    else
-        Notify("Waypoint", "Nenhum waypoint registrado!")
     end
-end)
+)
 
-AddButton(tabWaypoints, "Limpar Todos Waypoints", "Limpar", function()
-    State.Waypoints = {}
-    Notify("Waypoints", "Lista de waypoints resetada.")
-end)
-
--- --- ABA 6: SERVIDOR & UTILITÁRIOS ---
-AddToggle(tabServer, "Anti-AFK", "Impede desconexão por inatividade de 20 min.", function(s) State.AntiAFK = s end)
-AddToggle(tabServer, "Forçar Shift Lock", "Habilita a trava do mouse caso desativada.", function(s)
-    State.ShiftLockOverride = s
-    LocalPlayer.DevEnableMouseLock = s or true
-end)
-
-AddButton(tabServer, "Reconectar ao Servidor", "Rejoin", function()
-    Notify("Servidor", "Reconectando...")
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-end)
-
-AddButton(tabServer, "Server Hop (Trocar)", "Hop", function()
-    Notify("Servidor", "Buscando servidor com menor latência...")
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
-end)
-
-AddButton(tabServer, "Copiar JobID do Servidor", "Copiar", function()
-    if setclipboard then
-        setclipboard(tostring(game.JobId))
-        Notify("Servidor", "JobID copiado para a área de transferência!")
-    else
-        Notify("Servidor", "Seu executor não suporta setclipboard.")
+AddSlider(
+    tabPlayer,
+    "Altura (HipHeight)",
+    0,
+    30,
+    State.HipHeightValue,
+    function(v)
+        State.HipHeightValue = v
     end
-end)
+)
 
--- --- ABA 7: CONFIGURAÇÕES & ATALHOS ---
+AddToggle(
+    tabPlayer,
+    "Click Teleport",
+    "Ctrl + clique para teleportar.",
+    function(s)
+        State.ClickTP = s
+    end
+)
+
+-- ====================================================================
+-- MOVIMENTO
+-- ====================================================================
+
+AddToggle(
+    tabMovement,
+    "Modo Voo (Fly)",
+    "Flutue e navegue livremente.",
+    function(s)
+        State.FlyEnabled = s
+    end
+)
+
+AddSlider(
+    tabMovement,
+    "Velocidade de Voo",
+    20,
+    350,
+    State.FlySpeed,
+    function(v)
+        State.FlySpeed = v
+    end
+)
+
+AddToggle(
+    tabMovement,
+    "Noclip",
+    "Atravesse estruturas e paredes.",
+    function(s)
+        State.NoclipEnabled = s
+    end
+)
+
+AddToggle(
+    tabMovement,
+    "Gravidade Baixa",
+    "Altera a gravidade do workspace.",
+    function(s)
+        State.LowGravity = s
+
+        if not s then
+            workspace.Gravity = State.OriginalGravity
+        end
+    end
+)
+
+AddSlider(
+    tabMovement,
+    "Valor da Gravidade",
+    0,
+    196,
+    State.GravityValue,
+    function(v)
+        State.GravityValue = v
+    end
+)
+
+AddToggle(
+    tabMovement,
+    "Blink",
+    "Congela seu personagem.",
+    function(s)
+        State.BlinkEnabled = s
+        Notify(
+            "Blink Switch",
+            s and "Ativo" or "Inativo"
+        )
+    end
+)
+
+AddToggle(
+    tabMovement,
+    "Spinbot",
+    "Gira o personagem rapidamente.",
+    function(s)
+        State.SpinbotEnabled = s
+    end
+)
+
+AddSlider(
+    tabMovement,
+    "Velocidade de Rotação",
+    1,
+    100,
+    State.SpinSpeed,
+    function(v)
+        State.SpinSpeed = v
+    end
+)
+
+-- ====================================================================
+-- VISUAL
+-- ====================================================================
+
+AddToggle(
+    tabVisuals,
+    "ESP Master Switch",
+    "Ativa o sistema visual.",
+    function(s)
+        State.ESPEnabled = s
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "Highlight Box",
+    "Destaque luminoso nos jogadores.",
+    function(s)
+        State.ESPBoxes = s
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "ESP Nomes & Distância",
+    "Exibe nome, HP e distância.",
+    function(s)
+        State.ESPNames = s
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "ESP Tracers",
+    "Linhas da tela até os jogadores.",
+    function(s)
+        State.ESPTracers = s
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "Fullbright",
+    "Ilumina as áreas escuras.",
+    function(s)
+        State.Fullbright = s
+
+        if not s then
+            Lighting.Ambient = State.OriginalAmbient
+            Lighting.Brightness = State.OriginalBrightness
+        end
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "Sem Névoa",
+    "Remove a neblina.",
+    function(s)
+        State.NoFog = s
+
+        if not s then
+            Lighting.FogEnd = State.OriginalFogEnd
+        end
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "Crosshair",
+    "Mira fixa no centro.",
+    function(s)
+        State.CrosshairEnabled = s
+    end
+)
+
+AddToggle(
+    tabVisuals,
+    "FOV Customizado",
+    "Aumenta o campo de visão.",
+    function(s)
+        State.FOVEnabled = s
+
+        if not s then
+            Camera.FieldOfView = State.OriginalFieldOfView
+        end
+    end
+)
+
+AddSlider(
+    tabVisuals,
+    "Ângulo FOV",
+    70,
+    130,
+    State.FOVValue,
+    function(v)
+        State.FOVValue = v
+    end
+)
+
+-- ====================================================================
+-- COMBATE
+-- ====================================================================
+
+AddToggle(
+    tabCombat,
+    "Camera Lock / Aimbot",
+    "Trava a câmera no alvo mais próximo.",
+    function(s)
+        State.AimbotEnabled = s
+        Notify(
+            "Aimbot",
+            s and "Ativado" or "Desativado"
+        )
+    end
+)
+
+AddSlider(
+    tabCombat,
+    "Suavidade do Aimbot",
+    1,
+    10,
+    math.floor(State.AimbotSmoothness * 10),
+    function(v)
+        State.AimbotSmoothness = v / 10
+    end
+)
+
+AddToggle(
+    tabCombat,
+    "Mostrar Círculo FOV",
+    "Exibe o raio do aimbot.",
+    function(s)
+        State.ShowFOVCircle = s
+    end
+)
+
+AddSlider(
+    tabCombat,
+    "Raio do FOV Aim",
+    50,
+    400,
+    State.AimbotFOV,
+    function(v)
+        State.AimbotFOV = v
+    end
+)
+
+AddButton(
+    tabCombat,
+    "Mudar Alvo do Aim",
+    "Trocar Cabeça/Torso",
+    function()
+        if State.AimPart == "Head" then
+            State.AimPart = "HumanoidRootPart"
+            Notify(
+                "Aimbot",
+                "Alvo: TORSO"
+            )
+        else
+            State.AimPart = "Head"
+            Notify(
+                "Aimbot",
+                "Alvo: CABEÇA"
+            )
+        end
+    end
+)
+
+AddToggle(
+    tabCombat,
+    "Triggerbot",
+    "Ativa automaticamente ao mirar no alvo.",
+    function(s)
+        State.Triggerbot = s
+    end
+)
+
+AddToggle(
+    tabCombat,
+    "Hitbox Extender",
+    "Aumenta a área de acerto.",
+    function(s)
+        State.HitboxEnabled = s
+    end
+)
+
+AddSlider(
+    tabCombat,
+    "Tamanho da Hitbox",
+    2,
+    40,
+    State.HitboxSize,
+    function(v)
+        State.HitboxSize = v
+    end
+)
+
+-- ====================================================================
+-- WAYPOINTS
+-- ====================================================================
+
+AddTextBox(
+    tabWaypoints,
+    "Novo Waypoint",
+    "Nome do local...",
+    function(text)
+        if
+            text
+            and text ~= ""
+            and LocalPlayer.Character
+            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        then
+            local pos =
+                LocalPlayer.Character.HumanoidRootPart.Position
+
+            table.insert(
+                State.Waypoints,
+                {
+                    Name = text,
+                    Position = pos
+                }
+            )
+
+            Notify(
+                "Waypoint",
+                "Salvo: " .. text
+            )
+        end
+    end
+)
+
+AddButton(
+    tabWaypoints,
+    "Teleportar p/ Último Waypoint",
+    "Ir",
+    function()
+        if #State.Waypoints == 0 then
+            Notify(
+                "Waypoint",
+                "Nenhum waypoint registrado!"
+            )
+            return
+        end
+
+        local last =
+            State.Waypoints[#State.Waypoints]
+
+        local char = LocalPlayer.Character
+
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame =
+                CFrame.new(
+                    last.Position +
+                    Vector3.new(0, 3, 0)
+                )
+
+            Notify(
+                "Waypoint",
+                "Teleportado para: " .. last.Name
+            )
+        end
+    end
+)
+
+AddButton(
+    tabWaypoints,
+    "Limpar Todos Waypoints",
+    "Limpar",
+    function()
+        State.Waypoints = {}
+
+        Notify(
+            "Waypoints",
+            "Lista resetada."
+        )
+    end
+)
+
+-- ====================================================================
+-- SERVIDOR
+-- ====================================================================
+
+AddToggle(
+    tabServer,
+    "Anti-AFK",
+    "Evita desconexão por inatividade.",
+    function(s)
+        State.AntiAFK = s
+    end
+)
+
+AddToggle(
+    tabServer,
+    "Forçar Shift Lock",
+    "Ativa o Shift Lock.",
+    function(s)
+        State.ShiftLockOverride = s
+
+        pcall(function()
+            LocalPlayer.DevEnableMouseLock = s
+        end)
+    end
+)
+
+AddButton(
+    tabServer,
+    "Reconectar ao Servidor",
+    "Rejoin",
+    function()
+        Notify(
+            "Servidor",
+            "Reconectando..."
+        )
+
+        TeleportService:TeleportToPlaceInstance(
+            game.PlaceId,
+            game.JobId,
+            LocalPlayer
+        )
+    end
+)
+
+AddButton(
+    tabServer,
+    "Server Hop",
+    "Hop",
+    function()
+        Notify(
+            "Servidor",
+            "Trocando de servidor..."
+        )
+
+        TeleportService:Teleport(
+            game.PlaceId,
+            LocalPlayer
+        )
+    end
+)
+
+AddButton(
+    tabServer,
+    "Copiar JobID",
+    "Copiar",
+    function()
+        if setclipboard then
+            setclipboard(
+                tostring(game.JobId)
+            )
+
+            Notify(
+                "Servidor",
+                "JobID copiado!"
+            )
+        else
+            Notify(
+                "Servidor",
+                "setclipboard não disponível."
+            )
+        end
+    end
+)
+
+-- ====================================================================
+-- CONFIGURAÇÕES
+-- ====================================================================
+
 local keybindCard = Instance.new("Frame")
+
 keybindCard.Size = UDim2.new(1, -4, 0, 40)
 keybindCard.BackgroundColor3 = Theme.Card
 keybindCard.BorderSizePixel = 0
@@ -786,6 +1395,7 @@ kbCorner.CornerRadius = UDim.new(0, 6)
 kbCorner.Parent = keybindCard
 
 local kbLbl = Instance.new("TextLabel")
+
 kbLbl.Size = UDim2.new(0.6, 0, 1, 0)
 kbLbl.Position = UDim2.new(0, 10, 0, 0)
 kbLbl.BackgroundTransparency = 1
@@ -797,6 +1407,7 @@ kbLbl.TextXAlignment = Enum.TextXAlignment.Left
 kbLbl.Parent = keybindCard
 
 local kbBtn = Instance.new("TextButton")
+
 kbBtn.Size = UDim2.new(0, 95, 0, 24)
 kbBtn.Position = UDim2.new(1, -105, 0.5, -12)
 kbBtn.BackgroundColor3 = Theme.Accent
@@ -816,228 +1427,572 @@ kbBtn.MouseButton1Click:Connect(function()
 end)
 
 local function CreateThemePicker(parent, themeName, color)
-    AddButton(parent, "Tema: " .. themeName, "Aplicar", function()
-        Theme.Accent = color
-        title.TextColor3 = color
-        fovCircle.Color = color
-        for _, tab in pairs(Tabs) do
-            tab.Scroll.ScrollBarImageColor3 = color
-            if tab.Scroll.Visible then
-                tab.Button.TextColor3 = color
+    AddButton(
+        parent,
+        "Tema: " .. themeName,
+        "Aplicar",
+        function()
+            Theme.Accent = color
+
+            title.TextColor3 = color
+            fovCircle.Color = color
+
+            for _, tab in pairs(Tabs) do
+                tab.Scroll.ScrollBarImageColor3 = color
+
+                if tab.Scroll.Visible then
+                    tab.Button.TextColor3 = color
+                end
             end
+
+            Notify(
+                "Tema",
+                "Tema alterado para " .. themeName
+            )
         end
-        Notify("Tema", "Tema alterado para " .. themeName)
-    end)
+    )
 end
 
-CreateThemePicker(tabThemes, "Roxo Neon", Color3.fromRGB(138, 92, 246))
-CreateThemePicker(tabThemes, "Azul Cyber", Color3.fromRGB(14, 165, 233))
-CreateThemePicker(tabThemes, "Verde Matrix", Color3.fromRGB(34, 197, 94))
-CreateThemePicker(tabThemes, "Vermelho Rubro", Color3.fromRGB(239, 68, 68))
-CreateThemePicker(tabThemes, "Amarelo Ouro", Color3.fromRGB(234, 179, 8))
+CreateThemePicker(
+    tabThemes,
+    "Roxo Neon",
+    Color3.fromRGB(138, 92, 246)
+)
+
+CreateThemePicker(
+    tabThemes,
+    "Azul Cyber",
+    Color3.fromRGB(14, 165, 233)
+)
+
+CreateThemePicker(
+    tabThemes,
+    "Verde Matrix",
+    Color3.fromRGB(34, 197, 94)
+)
+
+CreateThemePicker(
+    tabThemes,
+    "Vermelho Rubro",
+    Color3.fromRGB(239, 68, 68)
+)
+
+CreateThemePicker(
+    tabThemes,
+    "Amarelo Ouro",
+    Color3.fromRGB(234, 179, 8)
+)
 
 -- ====================================================================
--- SISTEMAS & LOOPS DA ENGINE
+-- INPUT DO PAINEL
 -- ====================================================================
 
--- Atalho de teclado dinâmico
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if ListeningForKey and input.UserInputType == Enum.UserInputType.Keyboard then
-        TOGGLE_KEY = input.KeyCode
-        ListeningForKey = false
-        kbBtn.Text = TOGGLE_KEY.Name
-        Notify("Atalho Modificado", "Novo atalho: " .. TOGGLE_KEY.Name)
+    if ListeningForKey then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            TOGGLE_KEY = input.KeyCode
+            ListeningForKey = false
+
+            kbBtn.Text = TOGGLE_KEY.Name
+
+            Notify(
+                "Atalho Modificado",
+                "Novo atalho: " .. TOGGLE_KEY.Name
+            )
+        end
+
         return
     end
 
     if not gpe and input.KeyCode == TOGGLE_KEY then
         mainFrame.Visible = not mainFrame.Visible
+        UpdateMouseBehavior()
     end
 end)
 
--- Click Teleport
+-- ====================================================================
+-- CLICK TELEPORT
+-- ====================================================================
+
 Mouse.Button1Down:Connect(function()
-    if State.ClickTP and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") and Mouse.Hit then
-            char.HumanoidRootPart.CFrame = Mouse.Hit + Vector3.new(0, 3, 0)
-        end
+    if not State.ClickTP then
+        return
+    end
+
+    if not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        return
+    end
+
+    local char = LocalPlayer.Character
+
+    if
+        char
+        and char:FindFirstChild("HumanoidRootPart")
+        and Mouse.Hit
+    then
+        char.HumanoidRootPart.CFrame =
+            Mouse.Hit +
+            Vector3.new(0, 3, 0)
     end
 end)
 
--- Anti-AFK
+-- ====================================================================
+-- ANTI AFK
+-- ====================================================================
+
 local VirtualUser = game:GetService("VirtualUser")
+
 LocalPlayer.Idled:Connect(function()
-    if State.AntiAFK then
-        VirtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
+    if not State.AntiAFK then
+        return
     end
+
+    VirtualUser:Button2Down(
+        Vector2.new(0, 0),
+        Camera.CFrame
+    )
+
+    task.wait(1)
+
+    VirtualUser:Button2Up(
+        Vector2.new(0, 0),
+        Camera.CFrame
+    )
 end)
 
--- Pulo Infinito
+-- ====================================================================
+-- PULO INFINITO
+-- ====================================================================
+
 UserInputService.JumpRequest:Connect(function()
-    if State.InfJump then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChildOfClass("Humanoid") then
-            char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
-        end
+    if not State.InfJump then
+        return
+    end
+
+    local char = LocalPlayer.Character
+
+    if not char then
+        return
+    end
+
+    local humanoid =
+        char:FindFirstChildOfClass("Humanoid")
+
+    if humanoid then
+        humanoid:ChangeState(
+            Enum.HumanoidStateType.Jumping
+        )
     end
 end)
 
--- Caches de Desenho de ESP
+-- ====================================================================
+-- ESP CACHE
+-- ====================================================================
+
 local espCache = {}
 
 local function CleanupESP(plr)
-    if espCache[plr] then
-        if espCache[plr].Text then espCache[plr].Text:Remove() end
-        if espCache[plr].Tracer then espCache[plr].Tracer:Remove() end
-        espCache[plr] = nil
+    local cache = espCache[plr]
+
+    if not cache then
+        return
     end
+
+    if cache.Text then
+        pcall(function()
+            cache.Text:Remove()
+        end)
+    end
+
+    if cache.Tracer then
+        pcall(function()
+            cache.Tracer:Remove()
+        end)
+    end
+
+    espCache[plr] = nil
 end
 
--- Loop Principal RenderStepped
+-- ====================================================================
+-- HELPER: PRIMEIRA PESSOA
+-- ====================================================================
+
+local function IsFirstPerson()
+    if not Camera then
+        return false
+    end
+
+    return (
+        Camera.CFrame.Position -
+        Camera.Focus.Position
+    ).Magnitude < 1
+end
+
+-- ====================================================================
+-- HELPER: POSIÇÃO DO AIM/FOV
+-- ====================================================================
+
+local function GetAimScreenPosition()
+    if IsFirstPerson() then
+        return Vector2.new(
+            Camera.ViewportSize.X / 2,
+            Camera.ViewportSize.Y / 2
+        )
+    end
+
+    return UserInputService:GetMouseLocation()
+end
+
+-- ====================================================================
+-- LOOP PRINCIPAL
+-- ====================================================================
+
 RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera or Camera
+
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local root = char and char:FindFirstChild("HumanoidRootPart")
 
-    -- Velocidade, Pulo & HipHeight
+    -- ================================================================
+    -- PLAYER
+    -- ================================================================
+
     if hum then
-        if State.SpeedEnabled then hum.WalkSpeed = State.WalkSpeed end
+        if State.SpeedEnabled then
+            hum.WalkSpeed = State.WalkSpeed
+        end
+
         if State.JumpEnabled then
             hum.UseJumpPower = true
             hum.JumpPower = State.JumpPower
         end
-        if State.GodMode then hum.Health = hum.MaxHealth end
-        if State.HipHeightEnabled then hum.HipHeight = State.HipHeightValue end
-        
-        -- Auto Bhop
-        if State.BhopEnabled and hum.FloorMaterial ~= Enum.Material.Air and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+        if State.GodMode then
+            hum.Health = hum.MaxHealth
+        end
+
+        if State.HipHeightEnabled then
+            hum.HipHeight = State.HipHeightValue
+        end
+
+        if
+            State.BhopEnabled
+            and hum.FloorMaterial ~= Enum.Material.Air
+            and UserInputService:IsKeyDown(Enum.KeyCode.Space)
+        then
+            hum:ChangeState(
+                Enum.HumanoidStateType.Jumping
+            )
         end
     end
 
-    -- Gravidade
-    if State.LowGravity then workspace.Gravity = State.GravityValue end
+    -- ================================================================
+    -- GRAVIDADE
+    -- ================================================================
 
-    -- Flight Mode
+    if State.LowGravity then
+        workspace.Gravity = State.GravityValue
+    end
+
+    -- ================================================================
+    -- FLY
+    -- ================================================================
+
     if State.FlyEnabled and root then
-        local moveDir = Vector3.new(0, 0, 0)
+        local moveDir = Vector3.zero
 
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDir += Camera.CFrame.LookVector
+        end
 
-        root.Velocity = moveDir * State.FlySpeed
-        root.RotVelocity = Vector3.new(0, 0, 0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDir -= Camera.CFrame.LookVector
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDir -= Camera.CFrame.RightVector
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDir += Camera.CFrame.RightVector
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDir += Vector3.new(0, 1, 0)
+        end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveDir -= Vector3.new(0, 1, 0)
+        end
+
+        root.Velocity =
+            moveDir * State.FlySpeed
+
+        root.RotVelocity = Vector3.zero
     end
 
-    -- Spinbot
+    -- ================================================================
+    -- SPINBOT
+    -- ================================================================
+
     if State.SpinbotEnabled and root then
-        root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(State.SpinSpeed), 0)
+        root.CFrame =
+            root.CFrame *
+            CFrame.Angles(
+                0,
+                math.rad(State.SpinSpeed),
+                0
+            )
     end
 
-    -- Blink / Lag Switch
+    -- ================================================================
+    -- BLINK
+    -- ================================================================
+
     if State.BlinkEnabled and root then
         root.Anchored = true
     elseif root and not State.BlinkEnabled and root.Anchored then
         root.Anchored = false
     end
 
-    -- Noclip
+    -- ================================================================
+    -- NOCLIP
+    -- ================================================================
+
     if State.NoclipEnabled and char then
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
     end
 
-    -- Rendering Mods
+    -- ================================================================
+    -- FULLBRIGHT
+    -- ================================================================
+
     if State.Fullbright then
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.Ambient =
+            Color3.fromRGB(
+                255,
+                255,
+                255
+            )
+
         Lighting.Brightness = 2
     end
-    if State.NoFog then Lighting.FogEnd = 1e6 end
-    if State.FOVEnabled then Camera.FieldOfView = State.FOVValue end
 
-    -- Desenhar Círculo FOV do Aimbot
+    -- ================================================================
+    -- NO FOG
+    -- ================================================================
+
+    if State.NoFog then
+        Lighting.FogEnd = 1e6
+    end
+
+    -- ================================================================
+    -- FOV
+    -- ================================================================
+
+    if State.FOVEnabled then
+        Camera.FieldOfView = State.FOVValue
+    end
+
+    -- ================================================================
+    -- FOV CIRCLE
+    -- ================================================================
+
     if State.ShowFOVCircle then
-        fovCircle.Position = UserInputService:GetMouseLocation()
+        fovCircle.Position = GetAimScreenPosition()
         fovCircle.Radius = State.AimbotFOV
         fovCircle.Visible = true
     else
         fovCircle.Visible = false
     end
 
-    -- Desenhar Mira Fixa (Crosshair)
+    -- ================================================================
+    -- CROSSHAIR
+    -- ================================================================
+
     if State.CrosshairEnabled then
-        local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local center = Vector2.new(
+            Camera.ViewportSize.X / 2,
+            Camera.ViewportSize.Y / 2
+        )
+
         local length = 8
-        crosshairLines.Top.From = center - Vector2.new(0, 3)
-        crosshairLines.Top.To = center - Vector2.new(0, 3 + length)
-        crosshairLines.Bottom.From = center + Vector2.new(0, 3)
-        crosshairLines.Bottom.To = center + Vector2.new(0, 3 + length)
-        crosshairLines.Left.From = center - Vector2.new(3, 0)
-        crosshairLines.Left.To = center - Vector2.new(3 + length, 0)
-        crosshairLines.Right.From = center + Vector2.new(3, 0)
-        crosshairLines.Right.To = center + Vector2.new(3 + length, 0)
 
-        for _, line in pairs(crosshairLines) do line.Visible = true end
+        crosshairLines.Top.From =
+            center -
+            Vector2.new(0, 3)
+
+        crosshairLines.Top.To =
+            center -
+            Vector2.new(0, 3 + length)
+
+        crosshairLines.Bottom.From =
+            center +
+            Vector2.new(0, 3)
+
+        crosshairLines.Bottom.To =
+            center +
+            Vector2.new(0, 3 + length)
+
+        crosshairLines.Left.From =
+            center -
+            Vector2.new(3, 0)
+
+        crosshairLines.Left.To =
+            center -
+            Vector2.new(3 + length, 0)
+
+        crosshairLines.Right.From =
+            center +
+            Vector2.new(3, 0)
+
+        crosshairLines.Right.To =
+            center +
+            Vector2.new(3 + length, 0)
+
+        for _, line in pairs(crosshairLines) do
+            line.Visible = true
+        end
     else
-        for _, line in pairs(crosshairLines) do line.Visible = false end
-    end
-
-    -- Triggerbot Logic
-    if State.Triggerbot and Mouse.Target then
-        local targetChar = Mouse.Target:FindFirstAncestorOfClass("Model")
-        if targetChar and targetChar:FindFirstChild("Humanoid") and Players:GetPlayerFromCharacter(targetChar) ~= LocalPlayer then
-            mouse1click()
+        for _, line in pairs(crosshairLines) do
+            line.Visible = false
         end
     end
 
-    -- Sistema de Hitbox, ESP & Tracers
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local pRoot = plr.Character:FindFirstChild("HumanoidRootPart")
-            local pHum = plr.Character:FindFirstChildOfClass("Humanoid")
+    -- ================================================================
+    -- TRIGGERBOT
+    -- ================================================================
 
-            -- Hitbox Extender
+    if State.Triggerbot and Mouse.Target then
+        local targetChar =
+            Mouse.Target:FindFirstAncestorOfClass("Model")
+
+        if
+            targetChar
+            and targetChar:FindFirstChildOfClass("Humanoid")
+            and Players:GetPlayerFromCharacter(targetChar) ~= LocalPlayer
+        then
+            if mouse1click then
+                mouse1click()
+            end
+        end
+    end
+
+    -- ================================================================
+    -- ESP / HITBOX
+    -- ================================================================
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if
+            plr ~= LocalPlayer
+            and plr.Character
+        then
+            local targetChar = plr.Character
+
+            local pRoot =
+                targetChar:FindFirstChild(
+                    "HumanoidRootPart"
+                )
+
+            local pHum =
+                targetChar:FindFirstChildOfClass(
+                    "Humanoid"
+                )
+
+            -- ========================================================
+            -- HITBOX
+            -- ========================================================
+
             if pRoot then
                 if State.HitboxEnabled then
-                    pRoot.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
+                    pRoot.Size =
+                        Vector3.new(
+                            State.HitboxSize,
+                            State.HitboxSize,
+                            State.HitboxSize
+                        )
+
                     pRoot.Transparency = 0.7
                     pRoot.Color = Theme.Accent
-                    pRoot.Material = Enum.Material.ForceField
+                    pRoot.Material =
+                        Enum.Material.ForceField
                     pRoot.CanCollide = false
                 else
-                    pRoot.Size = Vector3.new(2, 2, 1)
+                    pRoot.Size =
+                        Vector3.new(
+                            2,
+                            2,
+                            1
+                        )
+
                     pRoot.Transparency = 1
                 end
             end
 
-            -- ESP Highlight
-            local highlight = plr.Character:FindFirstChild("ArchitectESP")
-            if State.ESPEnabled and State.ESPBoxes then
+            -- ========================================================
+            -- HIGHLIGHT
+            -- ========================================================
+
+            local highlight =
+                targetChar:FindFirstChild(
+                    "ArchitectESP"
+                )
+
+            if
+                State.ESPEnabled
+                and State.ESPBoxes
+            then
                 if not highlight then
-                    highlight = Instance.new("Highlight")
-                    highlight.Name = "ArchitectESP"
-                    highlight.FillColor = Theme.Accent
-                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.5
-                    highlight.Parent = plr.Character
+                    highlight =
+                        Instance.new("Highlight")
+
+                    highlight.Name =
+                        "ArchitectESP"
+
+                    highlight.FillColor =
+                        Theme.Accent
+
+                    highlight.OutlineColor =
+                        Color3.fromRGB(
+                            255,
+                            255,
+                            255
+                        )
+
+                    highlight.FillTransparency =
+                        0.5
+
+                    highlight.Parent =
+                        targetChar
+                else
+                    highlight.FillColor =
+                        Theme.Accent
                 end
             else
-                if highlight then highlight:Destroy() end
+                if highlight then
+                    highlight:Destroy()
+                end
             end
 
-            -- ESP Nomes e Tracers (Drawing API)
-            if State.ESPEnabled and pRoot and pHum and pHum.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(pRoot.Position)
+            -- ========================================================
+            -- ESP DRAWING
+            -- ========================================================
+
+            if
+                State.ESPEnabled
+                and pRoot
+                and pHum
+                and pHum.Health > 0
+            then
+                local screenPos, onScreen =
+                    Camera:WorldToViewportPoint(
+                        pRoot.Position
+                    )
 
                 if onScreen then
                     if not espCache[plr] then
@@ -1045,32 +2000,75 @@ RunService.RenderStepped:Connect(function()
                             Text = Drawing.new("Text"),
                             Tracer = Drawing.new("Line")
                         }
+
                         espCache[plr].Text.Size = 13
                         espCache[plr].Text.Center = true
                         espCache[plr].Text.Outline = true
-                        espCache[plr].Text.Color = Color3.fromRGB(255, 255, 255)
+                        espCache[plr].Text.Color =
+                            Color3.fromRGB(
+                                255,
+                                255,
+                                255
+                            )
 
                         espCache[plr].Tracer.Thickness = 1
-                        espCache[plr].Tracer.Color = Theme.Accent
+                        espCache[plr].Tracer.Color =
+                            Theme.Accent
                     end
 
-                    -- Desenhar Texto
+                    local cache = espCache[plr]
+
+                    -- Nomes
                     if State.ESPNames then
-                        local dist = math.floor((pRoot.Position - Camera.CFrame.Position).Magnitude)
-                        espCache[plr].Text.Position = Vector2.new(screenPos.X, screenPos.Y - 25)
-                        espCache[plr].Text.Text = string.format("%s [%d HP | %dm]", plr.Name, math.floor(pHum.Health), dist)
-                        espCache[plr].Text.Visible = true
+                        local dist =
+                            math.floor(
+                                (
+                                    pRoot.Position -
+                                    Camera.CFrame.Position
+                                ).Magnitude
+                            )
+
+                        cache.Text.Position =
+                            Vector2.new(
+                                screenPos.X,
+                                screenPos.Y - 25
+                            )
+
+                        cache.Text.Text =
+                            string.format(
+                                "%s [%d HP | %dm]",
+                                plr.Name,
+                                math.floor(
+                                    pHum.Health
+                                ),
+                                dist
+                            )
+
+                        cache.Text.Visible = true
                     else
-                        espCache[plr].Text.Visible = false
+                        cache.Text.Visible = false
                     end
 
-                    -- Desenhar Tracer
+                    -- Tracer
                     if State.ESPTracers then
-                        espCache[plr].Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        espCache[plr].Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-                        espCache[plr].Tracer.Visible = true
+                        cache.Tracer.From =
+                            Vector2.new(
+                                Camera.ViewportSize.X / 2,
+                                Camera.ViewportSize.Y
+                            )
+
+                        cache.Tracer.To =
+                            Vector2.new(
+                                screenPos.X,
+                                screenPos.Y
+                            )
+
+                        cache.Tracer.Color =
+                            Theme.Accent
+
+                        cache.Tracer.Visible = true
                     else
-                        espCache[plr].Tracer.Visible = false
+                        cache.Tracer.Visible = false
                     end
                 else
                     if espCache[plr] then
@@ -1086,38 +2084,124 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Camera Lock / Aimbot Avançado
+    -- ================================================================
+    -- AIMBOT
+    -- ================================================================
+
     if State.AimbotEnabled then
         local target = nil
         local minDistance = State.AimbotFOV
-        local mouseLoc = UserInputService:GetMouseLocation()
+
+        -- CORREÇÃO:
+        -- Primeira pessoa = centro da tela
+        -- Terceira pessoa = posição real do mouse
+        local aimPosition =
+            GetAimScreenPosition()
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                local targetPart = plr.Character:FindFirstChild(State.AimPart)
-                local pHum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if
+                plr ~= LocalPlayer
+                and plr.Character
+            then
+                local targetPart =
+                    plr.Character:FindFirstChild(
+                        State.AimPart
+                    )
 
-                if targetPart and pHum and pHum.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                local pHum =
+                    plr.Character:FindFirstChildOfClass(
+                        "Humanoid"
+                    )
+
+                if
+                    targetPart
+                    and pHum
+                    and pHum.Health > 0
+                then
+                    local screenPos, onScreen =
+                        Camera:WorldToViewportPoint(
+                            targetPart.Position
+                        )
+
                     if onScreen then
-                        local distToMouse = (Vector2.new(screenPos.X, screenPos.Y) - mouseLoc).Magnitude
-                        if distToMouse < minDistance then
-                            minDistance = distToMouse
-                            target = targetPart
+                        local distToAim =
+                            (
+                                Vector2.new(
+                                    screenPos.X,
+                                    screenPos.Y
+                                ) -
+                                aimPosition
+                            ).Magnitude
+
+                        if distToAim < minDistance then
+                            minDistance =
+                                distToAim
+
+                            target =
+                                targetPart
                         end
                     end
                 end
             end
         end
 
+        -- ============================================================
+        -- CAMERA LOCK
+        -- ============================================================
+
         if target then
-            local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, State.AimbotSmoothness)
+            local targetCFrame =
+                CFrame.new(
+                    Camera.CFrame.Position,
+                    target.Position
+                )
+
+            local smooth =
+                math.clamp(
+                    State.AimbotSmoothness,
+                    0.01,
+                    1
+                )
+
+            Camera.CFrame =
+                Camera.CFrame:Lerp(
+                    targetCFrame,
+                    smooth
+                )
         end
     end
 end)
 
--- Limpeza ao sair de jogadores
-Players.PlayerRemoving:Connect(CleanupESP)
+-- ====================================================================
+-- PLAYER REMOVING
+-- ====================================================================
 
-Notify("VOID ARCHITECT", "Suite v4.1 (Input Sliders) inicializada com sucesso!")
+Players.PlayerRemoving:Connect(function(plr)
+    CleanupESP(plr)
+end)
+
+-- ====================================================================
+-- RESPAWN
+-- ====================================================================
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+
+    Camera =
+        workspace.CurrentCamera or Camera
+
+    if not mainFrame.Visible then
+        UpdateMouseBehavior()
+    end
+end)
+
+-- ====================================================================
+-- INICIALIZAÇÃO
+-- ====================================================================
+
+UpdateMouseBehavior()
+
+Notify(
+    "VOID ARCHITECT",
+    "Suite v4.2 inicializada com sucesso!"
+)
