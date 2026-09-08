@@ -1,40 +1,28 @@
 ```lua
 --[[
 ====================================================================
-VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.7
-CLIENT-SIDE / TEST ENVIRONMENT
+VOID ARCHITECT // STABLE CLIENT SUITE
+LocalScript para o seu próprio jogo
+====================================================================
 
-CORREÇÕES:
-- Aimbot em primeira pessoa
-- Aimbot em terceira pessoa
-- Aimbot executado após a câmera
-- FOV usa centro em primeira pessoa
-- FOV usa mouse em terceira pessoa
-- Mouse livre com painel aberto
-- Mouse escondido somente em primeira pessoa quando fechado
-- Mouse livre em terceira pessoa quando fechado
-- Aimbot Hold Mode
-- Keybind configurável
-- ESP
-- Hitbox
-- Fly
-- Noclip
-- Spin
-- Blink
-- Anti-Fling
-- Infinite Zoom
-- Fullbright
-- No Fog
-- Crosshair
-- FPS Counter
-- Waypoints
-- Anti-AFK
+PRINCIPAL:
+- Menu abre com RightControl
+- Menu aberto -> mouse livre
+- Menu fechado + primeira pessoa -> mouse preso
+- Menu fechado + terceira pessoa -> mouse livre
+- Aimbot funciona em primeira pessoa
+- Aimbot funciona em terceira pessoa
+- FOV visual sem Drawing API
+- ESP usando Highlight
+- Sem Drawing.new
+- Sem mouse1click
+- Sem setclipboard
 ====================================================================
 ]]
 
---==================================================================
+--==============================================================
 -- SERVICES
---==================================================================
+--==============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -43,19 +31,18 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 
---==================================================================
--- REFERENCES
---==================================================================
+--==============================================================
+-- PLAYER
+--==============================================================
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
 local Mouse = LocalPlayer:GetMouse()
 
-local Camera = workspace.CurrentCamera
-
---==================================================================
+--==============================================================
 -- CLEANUP
---==================================================================
+--==============================================================
 
 local OldUI = PlayerGui:FindFirstChild("ArchitectSuiteUI")
 
@@ -63,186 +50,193 @@ if OldUI then
     OldUI:Destroy()
 end
 
-pcall(function()
-    RunService:UnbindFromRenderStep("ArchitectAimbot")
-end)
-
---==================================================================
+--==============================================================
 -- CONFIG
---==================================================================
+--==============================================================
 
 local TOGGLE_KEY = Enum.KeyCode.RightControl
-local ListeningFor = nil
 
 local Theme = {
     BG = Color3.fromRGB(10, 11, 16),
     Header = Color3.fromRGB(16, 17, 24),
     Sidebar = Color3.fromRGB(14, 15, 21),
     Card = Color3.fromRGB(20, 22, 30),
-
+    Track = Color3.fromRGB(40, 42, 58),
     Accent = Color3.fromRGB(138, 92, 246),
-
     Text = Color3.fromRGB(243, 244, 246),
     SubText = Color3.fromRGB(156, 163, 175)
 }
 
---==================================================================
+--==============================================================
 -- STATE
---==================================================================
+--==============================================================
 
 local State = {
 
-    -- PLAYER
     SpeedEnabled = false,
     WalkSpeed = 120,
 
     JumpEnabled = false,
     JumpPower = 150,
 
-    InfJump = false,
-    BhopEnabled = false,
+    InfiniteJump = false,
+    Bhop = false,
 
     GodMode = false,
 
-    ClickTP = false,
+    FlyEnabled = false,
+    FlySpeed = 80,
 
-    HipHeightEnabled = false,
-    HipHeightValue = 2,
+    Noclip = false,
+
+    LowGravity = false,
+    Gravity = 50,
+
+    Spinbot = false,
+    SpinSpeed = 20,
+
+    AntiFling = false,
 
     InfiniteZoom = false,
     ZoomDistance = 500,
 
     PlatformStand = false,
 
-    -- MOVEMENT
-    FlyEnabled = false,
-    FlySpeed = 80,
+    ClickTeleport = false,
 
-    NoclipEnabled = false,
+    HipHeightEnabled = false,
+    HipHeight = 2,
 
-    LowGravity = false,
-    GravityValue = 50,
-
-    BlinkEnabled = false,
-
-    SpinbotEnabled = false,
-    SpinSpeed = 20,
-
-    AntiFling = false,
-
-    -- VISUAL
-    ESPEnabled = false,
-    ESPBoxes = true,
+    -- Visual
+    ESP = false,
     ESPNames = true,
-    ESPTracers = false,
 
     Fullbright = false,
     NoFog = false,
 
-    FOVEnabled = false,
-    FOVValue = 90,
+    CustomFOV = false,
+    FOV = 90,
 
-    CrosshairEnabled = false,
+    Crosshair = false,
+    FPS = false,
 
-    FPSCounter = false,
-
-    -- COMBAT
-    AimbotEnabled = false,
+    -- Aim
+    Aimbot = false,
     AimbotHold = false,
     AimbotKey = Enum.KeyCode.LeftAlt,
 
-    AimbotSmoothness = 0.2,
     AimbotFOV = 150,
-
-    ShowFOVCircle = false,
+    AimbotSmoothness = 0.2,
 
     AimPart = "Head",
 
-    Triggerbot = false,
-
-    HitboxEnabled = false,
-    HitboxSize = 10,
-
-    -- UTILITY
+    -- Utility
     AntiAFK = true,
 
-    Waypoints = {},
-
-    -- ORIGINAL
-    OriginalGravity = workspace.Gravity,
-    OriginalFogEnd = Lighting.FogEnd,
-    OriginalAmbient = Lighting.Ambient,
-    OriginalBrightness = Lighting.Brightness,
-    OriginalFOV = Camera.FieldOfView,
-    OriginalZoom = LocalPlayer.CameraMaxZoomDistance
+    Waypoints = {}
 }
 
---==================================================================
--- CAMERA HELPERS
---==================================================================
+--==============================================================
+-- ORIGINAL VALUES
+--==============================================================
 
-local function RefreshCamera()
+local OriginalGravity = workspace.Gravity
+local OriginalFogEnd = Lighting.FogEnd
+local OriginalAmbient = Lighting.Ambient
+local OriginalBrightness = Lighting.Brightness
+
+local Camera = workspace.CurrentCamera
+local OriginalFOV = Camera.FieldOfView
+local OriginalZoom = LocalPlayer.CameraMaxZoomDistance
+
+--==============================================================
+-- HELPERS
+--==============================================================
+
+local function GetCamera()
     Camera = workspace.CurrentCamera or Camera
+    return Camera
 end
 
 local function IsFirstPerson()
-    RefreshCamera()
+    local camera = GetCamera()
 
-    local Character = LocalPlayer.Character
-    local Head = Character and Character:FindFirstChild("Head")
+    local character = LocalPlayer.Character
+    local head = character and character:FindFirstChild("Head")
 
-    if not Head or not Camera then
+    if not camera or not head then
         return false
     end
 
-    return (
-        Camera.CFrame.Position - Head.Position
-    ).Magnitude < 1.25
+    return (camera.CFrame.Position - head.Position).Magnitude < 1.25
 end
 
 local function GetAimPosition()
-    RefreshCamera()
+    local camera = GetCamera()
 
     if IsFirstPerson() then
         return Vector2.new(
-            Camera.ViewportSize.X / 2,
-            Camera.ViewportSize.Y / 2
+            camera.ViewportSize.X / 2,
+            camera.ViewportSize.Y / 2
         )
     end
 
     return UserInputService:GetMouseLocation()
 end
 
---==================================================================
--- DRAWING
---==================================================================
+--==============================================================
+-- MOUSE CONTROL
+--==============================================================
 
-local FOVCircle = Drawing.new("Circle")
+local LastMouseState = nil
 
-FOVCircle.Thickness = 1.5
-FOVCircle.Color = Theme.Accent
-FOVCircle.Filled = false
-FOVCircle.Transparency = 1
-FOVCircle.NumSides = 64
-FOVCircle.Visible = false
+local function UpdateMouse()
+    local MenuOpen = MainFrame.Visible
+    local FirstPerson = IsFirstPerson()
 
-local Crosshair = {
-    Top = Drawing.new("Line"),
-    Bottom = Drawing.new("Line"),
-    Left = Drawing.new("Line"),
-    Right = Drawing.new("Line")
-}
+    local StateKey =
+        tostring(MenuOpen) ..
+        "_" ..
+        tostring(FirstPerson)
 
-for _, Line in pairs(Crosshair) do
-    Line.Color = Color3.fromRGB(255, 255, 255)
-    Line.Thickness = 1.5
-    Line.Transparency = 0.8
-    Line.Visible = false
+    if StateKey == LastMouseState then
+        return
+    end
+
+    LastMouseState = StateKey
+
+    if MenuOpen then
+
+        UserInputService.MouseBehavior =
+            Enum.MouseBehavior.Default
+
+        UserInputService.MouseIconEnabled =
+            true
+
+        return
+    end
+
+    if FirstPerson then
+
+        UserInputService.MouseBehavior =
+            Enum.MouseBehavior.LockCenter
+
+        UserInputService.MouseIconEnabled =
+            false
+
+        return
+    end
+
+    UserInputService.MouseBehavior =
+        Enum.MouseBehavior.Default
+
+    UserInputService.MouseIconEnabled =
+        true
 end
 
---==================================================================
+--==============================================================
 -- GUI
---==================================================================
+--==============================================================
 
 local ScreenGui = Instance.new("ScreenGui")
 
@@ -251,28 +245,135 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
---==================================================================
--- FPS LABEL
---==================================================================
+--==============================================================
+-- FPS
+--==============================================================
 
 local FPSLabel = Instance.new("TextLabel")
 
-FPSLabel.Size = UDim2.new(0, 140, 0, 25)
+FPSLabel.Size = UDim2.new(0, 120, 0, 25)
 FPSLabel.Position = UDim2.new(0, 10, 0, 10)
+
 FPSLabel.BackgroundTransparency = 1
+
 FPSLabel.Text = "FPS: --"
 FPSLabel.TextColor3 = Theme.Accent
 FPSLabel.TextSize = 12
 FPSLabel.Font = Enum.Font.GothamBold
-FPSLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+FPSLabel.TextXAlignment =
+    Enum.TextXAlignment.Left
+
 FPSLabel.Visible = false
 FPSLabel.Parent = ScreenGui
 
---==================================================================
--- NOTIFICATIONS
---==================================================================
+--==============================================================
+-- AIM FOV
+--==============================================================
 
-local NotificationContainer = Instance.new("Frame")
+local FOVFrame = Instance.new("Frame")
+
+FOVFrame.Name = "AimbotFOV"
+
+FOVFrame.AnchorPoint =
+    Vector2.new(0.5, 0.5)
+
+FOVFrame.BackgroundTransparency = 1
+
+FOVFrame.Visible = false
+
+FOVFrame.ZIndex = 5
+
+FOVFrame.Parent = ScreenGui
+
+local FOVCorner = Instance.new("UICorner")
+
+FOVCorner.CornerRadius =
+    UDim.new(1, 0)
+
+FOVCorner.Parent =
+    FOVFrame
+
+local FOVStroke = Instance.new("UIStroke")
+
+FOVStroke.Thickness = 1.5
+FOVStroke.Color = Theme.Accent
+FOVStroke.Transparency = 0.1
+
+FOVStroke.Parent =
+    FOVFrame
+
+--==============================================================
+-- CROSSHAIR
+--==============================================================
+
+local CrosshairFrame = Instance.new("Frame")
+
+CrosshairFrame.Size =
+    UDim2.new(0, 1, 0, 1)
+
+CrosshairFrame.AnchorPoint =
+    Vector2.new(0.5, 0.5)
+
+CrosshairFrame.BackgroundTransparency = 1
+
+CrosshairFrame.Visible = false
+
+CrosshairFrame.Parent =
+    ScreenGui
+
+local function CreateCrosshairLine(
+    Size,
+    Position
+)
+
+    local Line = Instance.new("Frame")
+
+    Line.Size = Size
+    Line.Position = Position
+
+    Line.AnchorPoint =
+        Vector2.new(0.5, 0.5)
+
+    Line.BackgroundColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    Line.BorderSizePixel = 0
+
+    Line.Parent =
+        CrosshairFrame
+
+    return Line
+end
+
+local CrosshairLines = {
+    Top = CreateCrosshairLine(
+        UDim2.new(0, 2, 0, 8),
+        UDim2.new(0.5, 0, 0.5, -7)
+    ),
+
+    Bottom = CreateCrosshairLine(
+        UDim2.new(0, 2, 0, 8),
+        UDim2.new(0.5, 0, 0.5, 7)
+    ),
+
+    Left = CreateCrosshairLine(
+        UDim2.new(0, 8, 0, 2),
+        UDim2.new(0.5, -7, 0.5, 0)
+    ),
+
+    Right = CreateCrosshairLine(
+        UDim2.new(0, 8, 0, 2),
+        UDim2.new(0.5, 7, 0.5, 0)
+    )
+}
+
+--==============================================================
+-- NOTIFICATION
+--==============================================================
+
+local NotificationContainer =
+    Instance.new("Frame")
 
 NotificationContainer.Size =
     UDim2.new(
@@ -308,7 +409,10 @@ NotificationLayout.Padding =
 NotificationLayout.Parent =
     NotificationContainer
 
-local function Notify(TitleText, DescriptionText)
+local function Notify(
+    TitleText,
+    DescriptionText
+)
 
     local Card = Instance.new("Frame")
 
@@ -329,12 +433,19 @@ local function Notify(TitleText, DescriptionText)
         NotificationContainer
 
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
+
+    Corner.CornerRadius =
+        UDim.new(0, 6)
+
     Corner.Parent = Card
 
     local Stroke = Instance.new("UIStroke")
+
+    Stroke.Color =
+        Theme.Accent
+
     Stroke.Thickness = 1
-    Stroke.Color = Theme.Accent
+
     Stroke.Parent = Card
 
     local Title = Instance.new("TextLabel")
@@ -356,14 +467,24 @@ local function Notify(TitleText, DescriptionText)
         )
 
     Title.BackgroundTransparency = 1
-    Title.Text = TitleText
-    Title.TextColor3 = Theme.Accent
+
+    Title.Text =
+        TitleText
+
+    Title.TextColor3 =
+        Theme.Accent
+
     Title.TextSize = 11
-    Title.Font = Enum.Font.GothamBold
-    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Font =
+        Enum.Font.GothamBold
+
+    Title.TextXAlignment =
+        Enum.TextXAlignment.Left
+
     Title.Parent = Card
 
-    local Description = Instance.new("TextLabel")
+    local Description =
+        Instance.new("TextLabel")
 
     Description.Size =
         UDim2.new(
@@ -382,14 +503,24 @@ local function Notify(TitleText, DescriptionText)
         )
 
     Description.BackgroundTransparency = 1
-    Description.Text = DescriptionText
-    Description.TextColor3 = Theme.Text
+
+    Description.Text =
+        DescriptionText
+
+    Description.TextColor3 =
+        Theme.Text
+
     Description.TextSize = 10
-    Description.Font = Enum.Font.Gotham
-    Description.TextXAlignment = Enum.TextXAlignment.Left
+
+    Description.Font =
+        Enum.Font.Gotham
+
+    Description.TextXAlignment =
+        Enum.TextXAlignment.Left
+
     Description.Parent = Card
 
-    task.delay(3.5, function()
+    task.delay(3, function()
 
         if not Card.Parent then
             return
@@ -397,7 +528,7 @@ local function Notify(TitleText, DescriptionText)
 
         TweenService:Create(
             Card,
-            TweenInfo.new(0.3),
+            TweenInfo.new(0.25),
             {
                 BackgroundTransparency = 1
             }
@@ -405,7 +536,7 @@ local function Notify(TitleText, DescriptionText)
 
         TweenService:Create(
             Title,
-            TweenInfo.new(0.3),
+            TweenInfo.new(0.25),
             {
                 TextTransparency = 1
             }
@@ -413,21 +544,13 @@ local function Notify(TitleText, DescriptionText)
 
         TweenService:Create(
             Description,
-            TweenInfo.new(0.3),
+            TweenInfo.new(0.25),
             {
                 TextTransparency = 1
             }
         ):Play()
 
-        TweenService:Create(
-            Stroke,
-            TweenInfo.new(0.3),
-            {
-                Transparency = 1
-            }
-        ):Play()
-
-        task.wait(0.3)
+        task.wait(0.25)
 
         if Card.Parent then
             Card:Destroy()
@@ -435,13 +558,11 @@ local function Notify(TitleText, DescriptionText)
     end)
 end
 
---==================================================================
+--==============================================================
 -- MAIN FRAME
---==================================================================
+--==============================================================
 
 local MainFrame = Instance.new("Frame")
-
-MainFrame.Name = "MainFrame"
 
 MainFrame.Size =
     UDim2.new(
@@ -465,20 +586,23 @@ MainFrame.BackgroundColor3 =
 MainFrame.BorderSizePixel = 0
 
 MainFrame.Active = true
-
 MainFrame.Draggable = true
 
-MainFrame.ClipsDescendants = true
+MainFrame.Parent =
+    ScreenGui
 
-MainFrame.Parent = ScreenGui
+local MainCorner =
+    Instance.new("UICorner")
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 8)
-MainCorner.Parent = MainFrame
+MainCorner.CornerRadius =
+    UDim.new(0, 8)
 
-local MainStroke = Instance.new("UIStroke")
+MainCorner.Parent =
+    MainFrame
 
-MainStroke.Thickness = 1.2
+local MainStroke =
+    Instance.new("UIStroke")
+
 MainStroke.Color =
     Color3.fromRGB(
         40,
@@ -486,75 +610,17 @@ MainStroke.Color =
         58
     )
 
-MainStroke.Parent = MainFrame
+MainStroke.Thickness = 1.2
 
---==================================================================
--- MOUSE CONTROLLER
---==================================================================
+MainStroke.Parent =
+    MainFrame
 
-local LastMenuState = nil
-local LastFirstPersonState = nil
-
-local function UpdateMouseState(Force)
-
-    local MenuOpen =
-        MainFrame.Visible
-
-    local FirstPerson =
-        IsFirstPerson()
-
-    if not Force then
-
-        if
-            MenuOpen == LastMenuState
-            and
-            FirstPerson == LastFirstPersonState
-        then
-
-            return
-        end
-    end
-
-    LastMenuState =
-        MenuOpen
-
-    LastFirstPersonState =
-        FirstPerson
-
-    -- MENU ABERTO
-    if MenuOpen then
-
-        UserInputService.MouseBehavior =
-            Enum.MouseBehavior.Default
-
-        UserInputService.MouseIconEnabled = true
-
-        return
-    end
-
-    -- PRIMEIRA PESSOA
-    if FirstPerson then
-
-        UserInputService.MouseBehavior =
-            Enum.MouseBehavior.LockCenter
-
-        UserInputService.MouseIconEnabled = false
-
-        return
-    end
-
-    -- TERCEIRA PESSOA
-    UserInputService.MouseBehavior =
-        Enum.MouseBehavior.Default
-
-    UserInputService.MouseIconEnabled = true
-end
-
---==================================================================
+--==============================================================
 -- HEADER
---==================================================================
+--==============================================================
 
-local Header = Instance.new("Frame")
+local Header =
+    Instance.new("Frame")
 
 Header.Size =
     UDim2.new(
@@ -572,12 +638,13 @@ Header.BorderSizePixel = 0
 Header.Parent =
     MainFrame
 
-local Title = Instance.new("TextLabel")
+local Title =
+    Instance.new("TextLabel")
 
 Title.Size =
     UDim2.new(
         0,
-        400,
+        450,
         1,
         0
     )
@@ -593,7 +660,7 @@ Title.Position =
 Title.BackgroundTransparency = 1
 
 Title.Text =
-    "VOID // ARCHITECT SUITE v4.7"
+    "VOID // ARCHITECT SUITE"
 
 Title.TextColor3 =
     Theme.Accent
@@ -609,10 +676,10 @@ Title.TextXAlignment =
 Title.Parent =
     Header
 
-local CloseButton =
+local Close =
     Instance.new("TextButton")
 
-CloseButton.Size =
+Close.Size =
     UDim2.new(
         0,
         28,
@@ -620,7 +687,7 @@ CloseButton.Size =
         28
     )
 
-CloseButton.Position =
+Close.Position =
     UDim2.new(
         1,
         -36,
@@ -628,31 +695,31 @@ CloseButton.Position =
         -14
     )
 
-CloseButton.BackgroundColor3 =
+Close.BackgroundColor3 =
     Color3.fromRGB(
         239,
         68,
         68
     )
 
-CloseButton.BackgroundTransparency =
+Close.BackgroundTransparency =
     0.85
 
-CloseButton.Text = "×"
+Close.Text = "×"
 
-CloseButton.TextColor3 =
+Close.TextColor3 =
     Color3.fromRGB(
         248,
         113,
         113
     )
 
-CloseButton.TextSize = 18
+Close.TextSize = 18
 
-CloseButton.Font =
+Close.Font =
     Enum.Font.GothamBold
 
-CloseButton.Parent =
+Close.Parent =
     Header
 
 local CloseCorner =
@@ -662,18 +729,11 @@ CloseCorner.CornerRadius =
     UDim.new(0, 6)
 
 CloseCorner.Parent =
-    CloseButton
+    Close
 
-CloseButton.MouseButton1Click:Connect(function()
-
-    MainFrame.Visible = false
-
-    UpdateMouseState(true)
-end)
-
---==================================================================
+--==============================================================
 -- SIDEBAR
---==================================================================
+--==============================================================
 
 local Sidebar =
     Instance.new("Frame")
@@ -726,14 +786,14 @@ SidebarPadding.PaddingRight =
 SidebarPadding.Parent =
     Sidebar
 
---==================================================================
+--==============================================================
 -- CONTENT
---==================================================================
+--==============================================================
 
-local ContentArea =
+local Content =
     Instance.new("Frame")
 
-ContentArea.Size =
+Content.Size =
     UDim2.new(
         1,
         -145,
@@ -741,7 +801,7 @@ ContentArea.Size =
         -45
     )
 
-ContentArea.Position =
+Content.Position =
     UDim2.new(
         0,
         145,
@@ -749,14 +809,14 @@ ContentArea.Position =
         45
     )
 
-ContentArea.BackgroundTransparency = 1
+Content.BackgroundTransparency = 1
 
-ContentArea.Parent =
+Content.Parent =
     MainFrame
 
---==================================================================
--- TABS
---==================================================================
+--==============================================================
+-- TAB SYSTEM
+--==============================================================
 
 local Tabs = {}
 
@@ -772,9 +832,6 @@ local function CreateTab(Name)
             0,
             32
         )
-
-    Button.BackgroundColor3 =
-        Theme.Sidebar
 
     Button.BackgroundTransparency =
         1
@@ -796,20 +853,17 @@ local function CreateTab(Name)
     Button.Parent =
         Sidebar
 
-    local ButtonCorner =
+    local Corner =
         Instance.new("UICorner")
 
-    ButtonCorner.CornerRadius =
+    Corner.CornerRadius =
         UDim.new(0, 6)
 
-    ButtonCorner.Parent =
+    Corner.Parent =
         Button
 
     local Scroll =
         Instance.new("ScrollingFrame")
-
-    Scroll.Name =
-        Name .. "Tab"
 
     Scroll.Size =
         UDim2.new(
@@ -838,16 +892,8 @@ local function CreateTab(Name)
 
     Scroll.Visible = false
 
-    Scroll.CanvasSize =
-        UDim2.new(
-            0,
-            0,
-            0,
-            0
-        )
-
     Scroll.Parent =
-        ContentArea
+        Content
 
     local Layout =
         Instance.new("UIListLayout")
@@ -871,9 +917,19 @@ local function CreateTab(Name)
             )
     end)
 
+    local Data = {
+        Button = Button,
+        Scroll = Scroll
+    }
+
+    table.insert(
+        Tabs,
+        Data
+    )
+
     Button.MouseButton1Click:Connect(function()
 
-        for _, Tab in pairs(Tabs) do
+        for _, Tab in ipairs(Tabs) do
 
             Tab.Scroll.Visible = false
 
@@ -889,22 +945,11 @@ local function CreateTab(Name)
         Button.BackgroundColor3 =
             Theme.Card
 
-        Button.BackgroundTransparency =
-            0
+        Button.BackgroundTransparency = 0
 
         Button.TextColor3 =
             Theme.Accent
     end)
-
-    local Data = {
-        Button = Button,
-        Scroll = Scroll
-    }
-
-    table.insert(
-        Tabs,
-        Data
-    )
 
     if #Tabs == 1 then
 
@@ -913,8 +958,7 @@ local function CreateTab(Name)
         Button.BackgroundColor3 =
             Theme.Card
 
-        Button.BackgroundTransparency =
-            0
+        Button.BackgroundTransparency = 0
 
         Button.TextColor3 =
             Theme.Accent
@@ -923,14 +967,14 @@ local function CreateTab(Name)
     return Scroll
 end
 
---==================================================================
--- UI BUILDERS
---==================================================================
+--==============================================================
+-- UI ELEMENTS
+--==============================================================
 
 local function AddToggle(
     Parent,
-    TitleText,
-    DescriptionText,
+    Name,
+    Description,
     Callback
 )
 
@@ -962,18 +1006,18 @@ local function AddToggle(
     Corner.Parent =
         Card
 
-    local TitleLabel =
+    local Label =
         Instance.new("TextLabel")
 
-    TitleLabel.Size =
+    Label.Size =
         UDim2.new(
-            0.7,
+            0.72,
             0,
             0,
             18
         )
 
-    TitleLabel.Position =
+    Label.Position =
         UDim2.new(
             0,
             10,
@@ -981,37 +1025,37 @@ local function AddToggle(
             5
         )
 
-    TitleLabel.BackgroundTransparency = 1
+    Label.BackgroundTransparency = 1
 
-    TitleLabel.Text =
-        TitleText
+    Label.Text =
+        Name
 
-    TitleLabel.TextColor3 =
+    Label.TextColor3 =
         Theme.Text
 
-    TitleLabel.TextSize = 11
+    Label.TextSize = 11
 
-    TitleLabel.Font =
+    Label.Font =
         Enum.Font.GothamMedium
 
-    TitleLabel.TextXAlignment =
+    Label.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    TitleLabel.Parent =
+    Label.Parent =
         Card
 
-    local DescriptionLabel =
+    local Desc =
         Instance.new("TextLabel")
 
-    DescriptionLabel.Size =
+    Desc.Size =
         UDim2.new(
-            0.7,
+            0.72,
             0,
             0,
             16
         )
 
-    DescriptionLabel.Position =
+    Desc.Position =
         UDim2.new(
             0,
             10,
@@ -1019,24 +1063,23 @@ local function AddToggle(
             23
         )
 
-    DescriptionLabel.BackgroundTransparency =
-        1
+    Desc.BackgroundTransparency = 1
 
-    DescriptionLabel.Text =
-        DescriptionText
+    Desc.Text =
+        Description
 
-    DescriptionLabel.TextColor3 =
+    Desc.TextColor3 =
         Theme.SubText
 
-    DescriptionLabel.TextSize = 9
+    Desc.TextSize = 9
 
-    DescriptionLabel.Font =
+    Desc.Font =
         Enum.Font.Gotham
 
-    DescriptionLabel.TextXAlignment =
+    Desc.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    DescriptionLabel.Parent =
+    Desc.Parent =
         Card
 
     local Button =
@@ -1059,11 +1102,7 @@ local function AddToggle(
         )
 
     Button.BackgroundColor3 =
-        Color3.fromRGB(
-            40,
-            42,
-            58
-        )
+        Theme.Track
 
     Button.Text = ""
 
@@ -1079,10 +1118,10 @@ local function AddToggle(
     ButtonCorner.Parent =
         Button
 
-    local Indicator =
+    local Dot =
         Instance.new("Frame")
 
-    Indicator.Size =
+    Dot.Size =
         UDim2.new(
             0,
             12,
@@ -1090,7 +1129,7 @@ local function AddToggle(
             12
         )
 
-    Indicator.Position =
+    Dot.Position =
         UDim2.new(
             0,
             3,
@@ -1098,86 +1137,59 @@ local function AddToggle(
             -6
         )
 
-    Indicator.BackgroundColor3 =
+    Dot.BackgroundColor3 =
         Color3.fromRGB(
             180,
             180,
             200
         )
 
-    Indicator.BorderSizePixel = 0
+    Dot.BorderSizePixel = 0
 
-    Indicator.Parent =
+    Dot.Parent =
         Button
 
-    local IndicatorCorner =
+    local DotCorner =
         Instance.new("UICorner")
 
-    IndicatorCorner.CornerRadius =
+    DotCorner.CornerRadius =
         UDim.new(1, 0)
 
-    IndicatorCorner.Parent =
-        Indicator
+    DotCorner.Parent =
+        Dot
 
     local Enabled = false
 
     Button.MouseButton1Click:Connect(function()
 
-        Enabled = not Enabled
+        Enabled =
+            not Enabled
 
         if Enabled then
 
-            TweenService:Create(
-                Indicator,
-                TweenInfo.new(0.15),
-                {
-                    Position =
-                        UDim2.new(
-                            1,
-                            -15,
-                            0.5,
-                            -6
-                        )
-                }
-            ):Play()
+            Dot.Position =
+                UDim2.new(
+                    1,
+                    -15,
+                    0.5,
+                    -6
+                )
 
-            TweenService:Create(
-                Button,
-                TweenInfo.new(0.15),
-                {
-                    BackgroundColor3 =
-                        Theme.Accent
-                }
-            ):Play()
+            Button.BackgroundColor3 =
+                Theme.Accent
 
         else
 
-            TweenService:Create(
-                Indicator,
-                TweenInfo.new(0.15),
-                {
-                    Position =
-                        UDim2.new(
-                            0,
-                            3,
-                            0.5,
-                            -6
-                        )
-                }
-            ):Play()
+            Dot.Position =
+                UDim2.new(
+                    0,
+                    3,
+                    0.5,
+                    -6
+                )
 
-            TweenService:Create(
-                Button,
-                TweenInfo.new(0.15),
-                {
-                    BackgroundColor3 =
-                        Color3.fromRGB(
-                            40,
-                            42,
-                            58
-                        )
-                }
-            ):Play()
+            Button.BackgroundColor3 =
+                Theme.Track
         end
 
         Callback(Enabled)
@@ -1186,10 +1198,10 @@ end
 
 local function AddSlider(
     Parent,
-    TitleText,
-    MinValue,
-    MaxValue,
-    DefaultValue,
+    Name,
+    Min,
+    Max,
+    Default,
     Callback
 )
 
@@ -1221,10 +1233,10 @@ local function AddSlider(
     Corner.Parent =
         Card
 
-    local TitleLabel =
+    local Label =
         Instance.new("TextLabel")
 
-    TitleLabel.Size =
+    Label.Size =
         UDim2.new(
             0.6,
             0,
@@ -1232,7 +1244,7 @@ local function AddSlider(
             18
         )
 
-    TitleLabel.Position =
+    Label.Position =
         UDim2.new(
             0,
             10,
@@ -1240,23 +1252,23 @@ local function AddSlider(
             5
         )
 
-    TitleLabel.BackgroundTransparency = 1
+    Label.BackgroundTransparency = 1
 
-    TitleLabel.Text =
-        TitleText
+    Label.Text =
+        Name
 
-    TitleLabel.TextColor3 =
+    Label.TextColor3 =
         Theme.Text
 
-    TitleLabel.TextSize = 11
+    Label.TextSize = 11
 
-    TitleLabel.Font =
+    Label.Font =
         Enum.Font.GothamMedium
 
-    TitleLabel.TextXAlignment =
+    Label.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    TitleLabel.Parent =
+    Label.Parent =
         Card
 
     local Input =
@@ -1288,7 +1300,7 @@ local function AddSlider(
     Input.BorderSizePixel = 0
 
     Input.Text =
-        tostring(DefaultValue)
+        tostring(Default)
 
     Input.TextColor3 =
         Theme.Accent
@@ -1298,8 +1310,7 @@ local function AddSlider(
     Input.Font =
         Enum.Font.GothamBold
 
-    Input.ClearTextOnFocus =
-        false
+    Input.ClearTextOnFocus = false
 
     Input.Parent =
         Card
@@ -1333,11 +1344,7 @@ local function AddSlider(
         )
 
     Track.BackgroundColor3 =
-        Color3.fromRGB(
-            40,
-            42,
-            58
-        )
+        Theme.Track
 
     Track.BorderSizePixel = 0
 
@@ -1353,26 +1360,17 @@ local function AddSlider(
     TrackCorner.Parent =
         Track
 
-    local InitialPercent =
-        math.clamp(
-            (
-                DefaultValue -
-                MinValue
-            ) /
-            (
-                MaxValue -
-                MinValue
-            ),
-            0,
-            1
-        )
-
     local Fill =
         Instance.new("Frame")
 
     Fill.Size =
         UDim2.new(
-            InitialPercent,
+            math.clamp(
+                (Default - Min) /
+                (Max - Min),
+                0,
+                1
+            ),
             0,
             1,
             0
@@ -1400,26 +1398,21 @@ local function AddSlider(
         Value =
             math.clamp(
                 Value,
-                MinValue,
-                MaxValue
+                Min,
+                Max
             )
 
         Input.Text =
             tostring(Value)
 
-        local Percent =
-            (
-                Value -
-                MinValue
-            ) /
-            (
-                MaxValue -
-                MinValue
-            )
-
         Fill.Size =
             UDim2.new(
-                Percent,
+                (
+                    Value - Min
+                ) /
+                (
+                    Max - Min
+                ),
                 0,
                 1,
                 0
@@ -1432,15 +1425,12 @@ local function AddSlider(
 
     local function UpdateSlider(InputObject)
 
-        if Track.AbsoluteSize.X <= 0 then
-            return
-        end
+        local X =
+            InputObject.Position.X -
+            Track.AbsolutePosition.X
 
         local Percent =
-            (
-                InputObject.Position.X -
-                Track.AbsolutePosition.X
-            ) /
+            X /
             Track.AbsoluteSize.X
 
         Percent =
@@ -1450,17 +1440,15 @@ local function AddSlider(
                 1
             )
 
-        local Value =
+        SetValue(
             math.floor(
-                MinValue +
+                Min +
                 (
-                    MaxValue -
-                    MinValue
+                    Max - Min
                 ) *
                 Percent
             )
-
-        SetValue(Value)
+        )
     end
 
     Track.InputBegan:Connect(
@@ -1518,15 +1506,15 @@ local function AddSlider(
         if Number then
             SetValue(Number)
         else
-            SetValue(DefaultValue)
+            SetValue(Default)
         end
     end)
 end
 
 local function AddButton(
     Parent,
-    TitleText,
-    ButtonText,
+    Name,
+    Text,
     Callback
 )
 
@@ -1580,7 +1568,7 @@ local function AddButton(
     Label.BackgroundTransparency = 1
 
     Label.Text =
-        TitleText
+        Name
 
     Label.TextColor3 =
         Theme.Text
@@ -1619,7 +1607,7 @@ local function AddButton(
         Theme.Accent
 
     Button.Text =
-        ButtonText
+        Text
 
     Button.TextColor3 =
         Color3.fromRGB(
@@ -1654,8 +1642,8 @@ end
 
 local function AddTextBox(
     Parent,
-    TitleText,
-    PlaceholderText,
+    Name,
+    Placeholder,
     Callback
 )
 
@@ -1709,7 +1697,7 @@ local function AddTextBox(
     Label.BackgroundTransparency = 1
 
     Label.Text =
-        TitleText
+        Name
 
     Label.TextColor3 =
         Theme.Text
@@ -1754,15 +1742,10 @@ local function AddTextBox(
     Input.BorderSizePixel = 0
 
     Input.PlaceholderText =
-        PlaceholderText
-
-    Input.Text = ""
+        Placeholder
 
     Input.TextColor3 =
         Theme.Text
-
-    Input.PlaceholderColor3 =
-        Theme.SubText
 
     Input.TextSize = 10
 
@@ -1772,31 +1755,28 @@ local function AddTextBox(
     Input.Parent =
         Card
 
-    local InputCorner =
+    local Corner2 =
         Instance.new("UICorner")
 
-    InputCorner.CornerRadius =
+    Corner2.CornerRadius =
         UDim.new(0, 4)
 
-    InputCorner.Parent =
+    Corner2.Parent =
         Input
 
     Input.FocusLost:Connect(
         function(EnterPressed)
 
             if EnterPressed then
-
-                Callback(
-                    Input.Text
-                )
+                Callback(Input.Text)
             end
         end
     )
 end
 
---==================================================================
+--==============================================================
 -- TABS
---==================================================================
+--==============================================================
 
 local TabPlayer =
     CreateTab("Jogador")
@@ -1805,7 +1785,7 @@ local TabMovement =
     CreateTab("Movimento")
 
 local TabVisual =
-    CreateTab("Visual & ESP")
+    CreateTab("Visual")
 
 local TabCombat =
     CreateTab("Combate")
@@ -1819,18 +1799,16 @@ local TabServer =
 local TabConfig =
     CreateTab("Configurações")
 
---==================================================================
+--==============================================================
 -- PLAYER
---==================================================================
+--==============================================================
 
 AddToggle(
     TabPlayer,
     "Super Velocidade",
-    "Aumenta a velocidade.",
+    "Altera WalkSpeed.",
     function(Value)
-
-        State.SpeedEnabled =
-            Value
+        State.SpeedEnabled = Value
     end
 )
 
@@ -1841,20 +1819,16 @@ AddSlider(
     400,
     State.WalkSpeed,
     function(Value)
-
-        State.WalkSpeed =
-            Value
+        State.WalkSpeed = Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Super Pulo",
-    "Aumenta a força do salto.",
+    "Altera JumpPower.",
     function(Value)
-
-        State.JumpEnabled =
-            Value
+        State.JumpEnabled = Value
     end
 )
 
@@ -1865,9 +1839,7 @@ AddSlider(
     500,
     State.JumpPower,
     function(Value)
-
-        State.JumpPower =
-            Value
+        State.JumpPower = Value
     end
 )
 
@@ -1876,77 +1848,35 @@ AddToggle(
     "Pulo Infinito",
     "Permite pular no ar.",
     function(Value)
-
-        State.InfJump =
-            Value
+        State.InfiniteJump = Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Auto Bhop",
-    "Pulo automático.",
+    "Pula automaticamente.",
     function(Value)
-
-        State.BhopEnabled =
-            Value
+        State.Bhop = Value
     end
 )
 
 AddToggle(
     TabPlayer,
-    "God Mode Local",
-    "Mantém a saúde cheia.",
+    "God Mode",
+    "Mantém a vida cheia.",
     function(Value)
-
-        State.GodMode =
-            Value
-    end
-)
-
-AddToggle(
-    TabPlayer,
-    "HipHeight",
-    "Altera a altura.",
-    function(Value)
-
-        State.HipHeightEnabled =
-            Value
-    end
-)
-
-AddSlider(
-    TabPlayer,
-    "Altura",
-    0,
-    30,
-    State.HipHeightValue,
-    function(Value)
-
-        State.HipHeightValue =
-            Value
-    end
-)
-
-AddToggle(
-    TabPlayer,
-    "Click Teleport",
-    "Ctrl + clique.",
-    function(Value)
-
-        State.ClickTP =
-            Value
+        State.GodMode = Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Infinite Zoom",
-    "Aumenta o zoom.",
+    "Aumenta o zoom máximo.",
     function(Value)
 
-        State.InfiniteZoom =
-            Value
+        State.InfiniteZoom = Value
 
         if Value then
 
@@ -1956,21 +1886,20 @@ AddToggle(
         else
 
             LocalPlayer.CameraMaxZoomDistance =
-                State.OriginalZoom
+                OriginalZoom
         end
     end
 )
 
 AddSlider(
     TabPlayer,
-    "Distância da Câmera",
+    "Zoom",
     16,
     1000,
     State.ZoomDistance,
     function(Value)
 
-        State.ZoomDistance =
-            Value
+        State.ZoomDistance = Value
 
         if State.InfiniteZoom then
 
@@ -1983,71 +1912,62 @@ AddSlider(
 AddToggle(
     TabPlayer,
     "Platform Stand",
-    "Estado físico livre.",
+    "Ativa PlatformStand.",
     function(Value)
-
-        State.PlatformStand =
-            Value
+        State.PlatformStand = Value
     end
 )
 
-AddButton(
+AddToggle(
     TabPlayer,
-    "Resetar Personagem",
-    "Reset",
-    function()
-
-        local Character =
-            LocalPlayer.Character
-
-        local Humanoid =
-            Character and
-            Character:FindFirstChildOfClass(
-                "Humanoid"
-            )
-
-        if Humanoid then
-            Humanoid.Health = 0
-        end
+    "HipHeight",
+    "Altera altura.",
+    function(Value)
+        State.HipHeightEnabled = Value
     end
 )
 
---==================================================================
+AddSlider(
+    TabPlayer,
+    "HipHeight",
+    0,
+    30,
+    State.HipHeight,
+    function(Value)
+        State.HipHeight = Value
+    end
+)
+
+--==============================================================
 -- MOVEMENT
---==================================================================
+--==============================================================
 
 AddToggle(
     TabMovement,
     "Fly",
     "Movimentação aérea.",
     function(Value)
-
-        State.FlyEnabled =
-            Value
+        State.FlyEnabled = Value
     end
 )
 
 AddSlider(
     TabMovement,
-    "Velocidade do Fly",
+    "Fly Speed",
     20,
     350,
     State.FlySpeed,
     function(Value)
-
-        State.FlySpeed =
-            Value
+        State.FlySpeed = Value
     end
 )
 
 AddToggle(
     TabMovement,
     "Noclip",
-    "Atravessa objetos.",
+    "Atravessa partes.",
     function(Value)
-
-        State.NoclipEnabled =
-            Value
+        State.Noclip = Value
     end
 )
 
@@ -2057,13 +1977,12 @@ AddToggle(
     "Reduz a gravidade.",
     function(Value)
 
-        State.LowGravity =
-            Value
+        State.LowGravity = Value
 
         if not Value then
 
             workspace.Gravity =
-                State.OriginalGravity
+                OriginalGravity
         end
     end
 )
@@ -2073,124 +1992,70 @@ AddSlider(
     "Gravidade",
     0,
     196,
-    State.GravityValue,
+    State.Gravity,
     function(Value)
 
-        State.GravityValue =
-            Value
-    end
-)
-
-AddToggle(
-    TabMovement,
-    "Blink",
-    "Prende o personagem.",
-    function(Value)
-
-        State.BlinkEnabled =
-            Value
+        State.Gravity = Value
     end
 )
 
 AddToggle(
     TabMovement,
     "Spinbot",
-    "Rotação contínua.",
+    "Gira o personagem.",
     function(Value)
-
-        State.SpinbotEnabled =
-            Value
+        State.Spinbot = Value
     end
 )
 
 AddSlider(
     TabMovement,
-    "Velocidade de Rotação",
+    "Spin Speed",
     1,
     100,
     State.SpinSpeed,
     function(Value)
-
-        State.SpinSpeed =
-            Value
+        State.SpinSpeed = Value
     end
 )
 
 AddToggle(
     TabMovement,
     "Anti-Fling",
-    "Reduz velocidades extremas.",
+    "Bloqueia velocidades extremas.",
     function(Value)
-
-        State.AntiFling =
-            Value
+        State.AntiFling = Value
     end
 )
 
---==================================================================
+--==============================================================
 -- VISUAL
---==================================================================
+--==============================================================
 
 AddToggle(
     TabVisual,
     "ESP",
-    "Ativa o ESP.",
+    "Highlight dos jogadores.",
     function(Value)
-
-        State.ESPEnabled =
-            Value
-    end
-)
-
-AddToggle(
-    TabVisual,
-    "ESP Boxes",
-    "Destaca jogadores.",
-    function(Value)
-
-        State.ESPBoxes =
-            Value
-    end
-)
-
-AddToggle(
-    TabVisual,
-    "ESP Names",
-    "Mostra informações.",
-    function(Value)
-
-        State.ESPNames =
-            Value
-    end
-)
-
-AddToggle(
-    TabVisual,
-    "ESP Tracers",
-    "Linhas até jogadores.",
-    function(Value)
-
-        State.ESPTracers =
-            Value
+        State.ESP = Value
     end
 )
 
 AddToggle(
     TabVisual,
     "Fullbright",
-    "Ilumina o ambiente.",
+    "Ilumina o mapa.",
     function(Value)
 
-        State.Fullbright =
-            Value
+        State.Fullbright = Value
 
         if not Value then
 
             Lighting.Ambient =
-                State.OriginalAmbient
+                OriginalAmbient
 
             Lighting.Brightness =
-                State.OriginalBrightness
+                OriginalBrightness
         end
     end
 )
@@ -2198,44 +2063,31 @@ AddToggle(
 AddToggle(
     TabVisual,
     "No Fog",
-    "Remove a névoa.",
+    "Remove fog.",
     function(Value)
 
-        State.NoFog =
-            Value
+        State.NoFog = Value
 
         if not Value then
 
             Lighting.FogEnd =
-                State.OriginalFogEnd
+                OriginalFogEnd
         end
     end
 )
 
 AddToggle(
     TabVisual,
-    "Crosshair",
-    "Mira fixa.",
-    function(Value)
-
-        State.CrosshairEnabled =
-            Value
-    end
-)
-
-AddToggle(
-    TabVisual,
     "Custom FOV",
-    "Altera o FOV.",
+    "Muda campo de visão.",
     function(Value)
 
-        State.FOVEnabled =
-            Value
+        State.CustomFOV = Value
 
         if not Value then
 
-            Camera.FieldOfView =
-                State.OriginalFOV
+            GetCamera().FieldOfView =
+                OriginalFOV
         end
     end
 )
@@ -2245,11 +2097,20 @@ AddSlider(
     "FOV",
     70,
     130,
-    State.FOVValue,
+    State.FOV,
+    function(Value)
+        State.FOV = Value
+    end
+)
+
+AddToggle(
+    TabVisual,
+    "Crosshair",
+    "Mira no centro.",
     function(Value)
 
-        State.FOVValue =
-            Value
+        State.Crosshair = Value
+        CrosshairFrame.Visible = Value
     end
 )
 
@@ -2259,44 +2120,32 @@ AddToggle(
     "Mostra FPS.",
     function(Value)
 
-        State.FPSCounter =
-            Value
-
-        FPSLabel.Visible =
-            Value
+        State.FPS = Value
+        FPSLabel.Visible = Value
     end
 )
 
---==================================================================
+--==============================================================
 -- COMBAT
---==================================================================
+--==============================================================
 
 AddToggle(
     TabCombat,
     "Aimbot",
-    "Seleciona o alvo mais próximo.",
+    "Seleciona alvo próximo da mira.",
     function(Value)
 
-        State.AimbotEnabled =
-            Value
-
-        Notify(
-            "Aimbot",
-            Value and
-                "Ativado" or
-                "Desativado"
-        )
+        State.Aimbot = Value
     end
 )
 
 AddToggle(
     TabCombat,
-    "Aimbot Hold",
+    "Hold Mode",
     "Só funciona segurando a tecla.",
     function(Value)
 
-        State.AimbotHold =
-            Value
+        State.AimbotHold = Value
     end
 )
 
@@ -2309,11 +2158,13 @@ AimKeyButton =
         State.AimbotKey.Name,
         function()
 
+            Notify(
+                "Aimbot",
+                "Pressione a nova tecla."
+            )
+
             ListeningFor =
                 "AIM"
-
-            AimKeyButton.Text =
-                "Pressione..."
         end
     )
 
@@ -2333,7 +2184,7 @@ AddSlider(
 AddToggle(
     TabCombat,
     "Mostrar FOV",
-    "Mostra a área de seleção.",
+    "Mostra o alcance.",
     function(Value)
 
         State.ShowFOVCircle =
@@ -2343,7 +2194,7 @@ AddToggle(
 
 AddSlider(
     TabCombat,
-    "Raio do FOV",
+    "Aimbot FOV",
     50,
     400,
     State.AimbotFOV,
@@ -2356,8 +2207,8 @@ AddSlider(
 
 AddButton(
     TabCombat,
-    "Parte do Alvo",
-    "Cabeça / Torso",
+    "Trocar Alvo",
+    "Head / Torso",
     function()
 
         if State.AimPart == "Head" then
@@ -2365,98 +2216,59 @@ AddButton(
             State.AimPart =
                 "HumanoidRootPart"
 
-            Notify(
-                "Aimbot",
-                "Alvo: TORSO"
-            )
-
         else
 
             State.AimPart =
                 "Head"
-
-            Notify(
-                "Aimbot",
-                "Alvo: CABEÇA"
-            )
         end
+
+        Notify(
+            "Aimbot",
+            "Alvo: " ..
+                State.AimPart
+        )
     end
 )
 
-AddToggle(
-    TabCombat,
-    "Triggerbot",
-    "Ação automática.",
-    function(Value)
-
-        State.Triggerbot =
-            Value
-    end
-)
-
-AddToggle(
-    TabCombat,
-    "Hitbox Extender",
-    "Aumenta a área.",
-    function(Value)
-
-        State.HitboxEnabled =
-            Value
-    end
-)
-
-AddSlider(
-    TabCombat,
-    "Tamanho da Hitbox",
-    2,
-    40,
-    State.HitboxSize,
-    function(Value)
-
-        State.HitboxSize =
-            Value
-    end
-)
-
---==================================================================
+--==============================================================
 -- WAYPOINTS
---==================================================================
+--==============================================================
 
 AddTextBox(
     TabWaypoints,
     "Novo Waypoint",
-    "Nome do local...",
+    "Nome...",
     function(Text)
 
-        if
-            Text
-            and
-            Text ~= ""
-            and
-            LocalPlayer.Character
-            and
-            LocalPlayer.Character:
-                FindFirstChild(
-                    "HumanoidRootPart"
-                )
-        then
-
-            table.insert(
-                State.Waypoints,
-                {
-                    Name = Text,
-                    Position =
-                        LocalPlayer.Character
-                        .HumanoidRootPart
-                        .Position
-                }
-            )
-
-            Notify(
-                "Waypoint",
-                "Salvo: " .. Text
-            )
+        if Text == "" then
+            return
         end
+
+        local Character =
+            LocalPlayer.Character
+
+        local Root =
+            Character and
+            Character:FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+        if not Root then
+            return
+        end
+
+        table.insert(
+            State.Waypoints,
+            {
+                Name = Text,
+                Position = Root.Position
+            }
+        )
+
+        Notify(
+            "Waypoint",
+            "Salvo: " .. Text
+        )
     end
 )
 
@@ -2466,7 +2278,12 @@ AddButton(
     "Ir",
     function()
 
-        if #State.Waypoints == 0 then
+        local Waypoint =
+            State.Waypoints[
+                #State.Waypoints
+            ]
+
+        if not Waypoint then
 
             Notify(
                 "Waypoint",
@@ -2475,11 +2292,6 @@ AddButton(
 
             return
         end
-
-        local Waypoint =
-            State.Waypoints[
-                #State.Waypoints
-            ]
 
         local Character =
             LocalPlayer.Character
@@ -2514,15 +2326,15 @@ AddButton(
         State.Waypoints = {}
 
         Notify(
-            "Waypoints",
+            "Waypoint",
             "Lista limpa."
         )
     end
 )
 
---==================================================================
+--==============================================================
 -- SERVER
---==================================================================
+--==============================================================
 
 AddToggle(
     TabServer,
@@ -2530,14 +2342,13 @@ AddToggle(
     "Evita desconexão.",
     function(Value)
 
-        State.AntiAFK =
-            Value
+        State.AntiAFK = Value
     end
 )
 
 AddButton(
     TabServer,
-    "Reconectar",
+    "Rejoin",
     "Rejoin",
     function()
 
@@ -2550,45 +2361,9 @@ AddButton(
     end
 )
 
-AddButton(
-    TabServer,
-    "Trocar Servidor",
-    "Hop",
-    function()
-
-        TeleportService:
-            Teleport(
-                game.PlaceId,
-                LocalPlayer
-            )
-    end
-)
-
-AddButton(
-    TabServer,
-    "Copiar JobID",
-    "Copiar",
-    function()
-
-        if setclipboard then
-
-            setclipboard(
-                tostring(
-                    game.JobId
-                )
-            )
-
-            Notify(
-                "Servidor",
-                "JobID copiado!"
-            )
-        end
-    end
-)
-
---==================================================================
+--==============================================================
 -- CONFIG
---==================================================================
+--==============================================================
 
 local PanelKeyButton
 
@@ -2607,108 +2382,13 @@ PanelKeyButton =
         end
     )
 
-local function CreateTheme(
-    Parent,
-    Name,
-    Color
-)
-
-    AddButton(
-        Parent,
-        "Tema: " .. Name,
-        "Aplicar",
-        function()
-
-            Theme.Accent =
-                Color
-
-            Title.TextColor3 =
-                Color
-
-            FOVCircle.Color =
-                Color
-
-            FPSLabel.TextColor3 =
-                Color
-
-            for _, Tab in pairs(Tabs) do
-
-                Tab.Scroll.ScrollBarImageColor3 =
-                    Color
-
-                if Tab.Scroll.Visible then
-
-                    Tab.Button.TextColor3 =
-                        Color
-                end
-            end
-
-            Notify(
-                "Tema",
-                "Aplicado: " .. Name
-            )
-        end
-    )
-end
-
-CreateTheme(
-    TabConfig,
-    "Roxo Neon",
-    Color3.fromRGB(
-        138,
-        92,
-        246
-    )
-)
-
-CreateTheme(
-    TabConfig,
-    "Azul Cyber",
-    Color3.fromRGB(
-        14,
-        165,
-        233
-    )
-)
-
-CreateTheme(
-    TabConfig,
-    "Verde Matrix",
-    Color3.fromRGB(
-        34,
-        197,
-        94
-    )
-)
-
-CreateTheme(
-    TabConfig,
-    "Vermelho",
-    Color3.fromRGB(
-        239,
-        68,
-        68
-    )
-)
-
-CreateTheme(
-    TabConfig,
-    "Ouro",
-    Color3.fromRGB(
-        234,
-        179,
-        8
-    )
-)
-
---==================================================================
--- INPUT
---==================================================================
+--==============================================================
+-- KEYBOARD
+--==============================================================
 
 UserInputService.InputBegan:Connect(
-    function(Input, GameProcessed)
+    function(Input, Processed)
 
-        -- KEYBIND
         if ListeningFor then
 
             if
@@ -2716,9 +2396,7 @@ UserInputService.InputBegan:Connect(
                 Enum.UserInputType.Keyboard
             then
 
-                if ListeningFor ==
-                    "PANEL"
-                then
+                if ListeningFor == "PANEL" then
 
                     TOGGLE_KEY =
                         Input.KeyCode
@@ -2726,25 +2404,13 @@ UserInputService.InputBegan:Connect(
                     PanelKeyButton.Text =
                         Input.KeyCode.Name
 
-                    Notify(
-                        "Painel",
-                        "Tecla alterada."
-                    )
-
-                elseif ListeningFor ==
-                    "AIM"
-                then
+                elseif ListeningFor == "AIM" then
 
                     State.AimbotKey =
                         Input.KeyCode
 
                     AimKeyButton.Text =
                         Input.KeyCode.Name
-
-                    Notify(
-                        "Aimbot",
-                        "Tecla alterada."
-                    )
                 end
 
                 ListeningFor = nil
@@ -2753,9 +2419,8 @@ UserInputService.InputBegan:Connect(
             return
         end
 
-        -- TOGGLE MENU
         if
-            not GameProcessed
+            not Processed
             and
             Input.KeyCode ==
                 TOGGLE_KEY
@@ -2764,26 +2429,51 @@ UserInputService.InputBegan:Connect(
             MainFrame.Visible =
                 not MainFrame.Visible
 
-            UpdateMouseState(true)
+            UpdateMouse()
         end
     end
 )
 
---==================================================================
--- CLICK TELEPORT
---==================================================================
+--==============================================================
+-- INFINITE JUMP
+--==============================================================
 
-Mouse.Button1Down:Connect(function()
+UserInputService.JumpRequest:Connect(function()
 
-    if not State.ClickTP then
+    if not State.InfiniteJump then
         return
     end
 
-    if not UserInputService:
-        IsKeyDown(
-            Enum.KeyCode.LeftControl
+    local Character =
+        LocalPlayer.Character
+
+    local Humanoid =
+        Character and
+        Character:FindFirstChildOfClass(
+            "Humanoid"
         )
-    then
+
+    if Humanoid then
+
+        Humanoid:ChangeState(
+            Enum.HumanoidStateType.Jumping
+        )
+    end
+end)
+
+--==============================================================
+-- CLICK TELEPORT
+--==============================================================
+
+Mouse.Button1Down:Connect(function()
+
+    if not State.ClickTeleport then
+        return
+    end
+
+    if not UserInputService:IsKeyDown(
+        Enum.KeyCode.LeftControl
+    ) then
         return
     end
 
@@ -2808,82 +2498,121 @@ Mouse.Button1Down:Connect(function()
     end
 end)
 
---==================================================================
--- INFINITE JUMP
---==================================================================
+--==============================================================
+-- FPS
+--==============================================================
 
-UserInputService.JumpRequest:Connect(function()
+local FPSFrames = 0
+local FPSTimer = os.clock()
 
-    if not State.InfJump then
+--==============================================================
+-- ESP
+--==============================================================
+
+local ESPObjects = {}
+
+local function RemoveESP(Player)
+
+    local Highlight =
+        ESPObjects[Player]
+
+    if Highlight then
+
+        if Highlight.Parent then
+            Highlight:Destroy()
+        end
+
+        ESPObjects[Player] = nil
+    end
+end
+
+local function UpdateESP(Player)
+
+    if Player == LocalPlayer then
         return
     end
 
     local Character =
-        LocalPlayer.Character
+        Player.Character
 
-    local Humanoid =
-        Character and
-        Character:FindFirstChildOfClass(
-            "Humanoid"
-        )
+    if not Character then
 
-    if Humanoid then
+        RemoveESP(Player)
 
-        Humanoid:ChangeState(
-            Enum.HumanoidStateType.Jumping
-        )
-    end
-end)
-
---==================================================================
--- ANTI AFK
---==================================================================
-
-local VirtualUser =
-    game:GetService(
-        "VirtualUser"
-    )
-
-LocalPlayer.Idled:Connect(function()
-
-    if not State.AntiAFK then
         return
     end
 
-    VirtualUser:Button2Down(
-        Vector2.new(
-            0,
-            0
-        ),
-        Camera.CFrame
-    )
+    if not State.ESP then
 
-    task.wait(1)
+        RemoveESP(Player)
 
-    VirtualUser:Button2Up(
-        Vector2.new(
-            0,
-            0
-        ),
-        Camera.CFrame
-    )
-end)
+        return
+    end
 
---==================================================================
--- FPS
---==================================================================
+    local Highlight =
+        ESPObjects[Player]
 
-local FPSFrames = 0
-local FPSTime = os.clock()
+    if not Highlight then
+
+        Highlight =
+            Instance.new("Highlight")
+
+        Highlight.Name =
+            "ArchitectESP"
+
+        Highlight.FillColor =
+            Theme.Accent
+
+        Highlight.OutlineColor =
+            Color3.fromRGB(
+                255,
+                255,
+                255
+            )
+
+        Highlight.FillTransparency =
+            0.5
+
+        Highlight.Parent =
+            Character
+
+        ESPObjects[Player] =
+            Highlight
+    else
+
+        Highlight.FillColor =
+            Theme.Accent
+    end
+end
+
+Players.PlayerRemoving:Connect(
+    function(Player)
+
+        RemoveESP(Player)
+    end
+)
+
+--==============================================================
+-- MAIN LOOP
+--==============================================================
 
 RunService.RenderStepped:Connect(function()
 
+    GetCamera()
+
+    --============================================================
+    -- MOUSE
+    --============================================================
+
+    UpdateMouse()
+
+    --============================================================
+    -- FPS
+    --============================================================
+
     FPSFrames += 1
 
-    local Now =
-        os.clock()
-
-    if Now - FPSTime >= 1 then
+    if os.clock() - FPSTimer >= 1 then
 
         FPSLabel.Text =
             "FPS: " ..
@@ -2892,43 +2621,12 @@ RunService.RenderStepped:Connect(function()
             )
 
         FPSFrames = 0
-        FPSTime = Now
+        FPSTimer = os.clock()
     end
-end)
 
---==================================================================
--- MOUSE STATE MONITOR
---==================================================================
-
-RunService.RenderStepped:Connect(function()
-
-    RefreshCamera()
-
-    local FirstPerson =
-        IsFirstPerson()
-
-    local MenuOpen =
-        MainFrame.Visible
-
-    if
-        FirstPerson ~=
-            LastFirstPersonState
-        or
-        MenuOpen ~=
-            LastMenuState
-    then
-
-        UpdateMouseState(true)
-    end
-end)
-
---==================================================================
--- MAIN LOOP
---==================================================================
-
-RunService.RenderStepped:Connect(function()
-
-    RefreshCamera()
+    --============================================================
+    -- CHARACTER
+    --============================================================
 
     local Character =
         LocalPlayer.Character
@@ -2945,9 +2643,9 @@ RunService.RenderStepped:Connect(function()
             "HumanoidRootPart"
         )
 
-    --==============================================================
+    --============================================================
     -- PLAYER
-    --==============================================================
+    --============================================================
 
     if Humanoid then
 
@@ -2972,25 +2670,24 @@ RunService.RenderStepped:Connect(function()
                 Humanoid.MaxHealth
         end
 
-        if State.HipHeightEnabled then
-
-            Humanoid.HipHeight =
-                State.HipHeightValue
-        end
-
         Humanoid.PlatformStand =
             State.PlatformStand
 
+        if State.HipHeightEnabled then
+
+            Humanoid.HipHeight =
+                State.HipHeight
+        end
+
         if
-            State.BhopEnabled
+            State.Bhop
             and
             Humanoid.FloorMaterial ~=
                 Enum.Material.Air
             and
-            UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.Space
-                )
+            UserInputService:IsKeyDown(
+                Enum.KeyCode.Space
+            )
         then
 
             Humanoid:ChangeState(
@@ -2999,9 +2696,9 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    --==============================================================
+    --============================================================
     -- ZOOM
-    --==============================================================
+    --============================================================
 
     if State.InfiniteZoom then
 
@@ -3009,19 +2706,19 @@ RunService.RenderStepped:Connect(function()
             State.ZoomDistance
     end
 
-    --==============================================================
+    --============================================================
     -- GRAVITY
-    --==============================================================
+    --============================================================
 
     if State.LowGravity then
 
         workspace.Gravity =
-            State.GravityValue
+            State.Gravity
     end
 
-    --==============================================================
+    --============================================================
     -- FLY
-    --==============================================================
+    --============================================================
 
     if
         State.FlyEnabled
@@ -3032,12 +2729,15 @@ RunService.RenderStepped:Connect(function()
         local Direction =
             Vector3.zero
 
+        local CameraCF =
+            Camera.CFrame
+
         if UserInputService:IsKeyDown(
             Enum.KeyCode.W
         ) then
 
             Direction +=
-                Camera.CFrame.LookVector
+                CameraCF.LookVector
         end
 
         if UserInputService:IsKeyDown(
@@ -3045,7 +2745,7 @@ RunService.RenderStepped:Connect(function()
         ) then
 
             Direction -=
-                Camera.CFrame.LookVector
+                CameraCF.LookVector
         end
 
         if UserInputService:IsKeyDown(
@@ -3053,7 +2753,7 @@ RunService.RenderStepped:Connect(function()
         ) then
 
             Direction -=
-                Camera.CFrame.RightVector
+                CameraCF.RightVector
         end
 
         if UserInputService:IsKeyDown(
@@ -3061,7 +2761,7 @@ RunService.RenderStepped:Connect(function()
         ) then
 
             Direction +=
-                Camera.CFrame.RightVector
+                CameraCF.RightVector
         end
 
         if UserInputService:IsKeyDown(
@@ -3088,17 +2788,14 @@ RunService.RenderStepped:Connect(function()
                 )
         end
 
-        Root.Velocity =
+        Root.AssemblyLinearVelocity =
             Direction *
             State.FlySpeed
-
-        Root.RotVelocity =
-            Vector3.zero
     end
 
-    --==============================================================
+    --============================================================
     -- ANTI FLING
-    --==============================================================
+    --============================================================
 
     if
         State.AntiFling
@@ -3127,12 +2824,12 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    --==============================================================
+    --============================================================
     -- SPIN
-    --==============================================================
+    --============================================================
 
     if
-        State.SpinbotEnabled
+        State.Spinbot
         and
         Root
     then
@@ -3148,35 +2845,12 @@ RunService.RenderStepped:Connect(function()
             )
     end
 
-    --==============================================================
-    -- BLINK
-    --==============================================================
-
-    if
-        State.BlinkEnabled
-        and
-        Root
-    then
-
-        Root.Anchored = true
-
-    elseif
-        Root
-        and
-        not State.BlinkEnabled
-        and
-        Root.Anchored
-    then
-
-        Root.Anchored = false
-    end
-
-    --==============================================================
+    --============================================================
     -- NOCLIP
-    --==============================================================
+    --============================================================
 
     if
-        State.NoclipEnabled
+        State.Noclip
         and
         Character
     then
@@ -3192,9 +2866,9 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    --==============================================================
-    -- VISUAL
-    --==============================================================
+    --============================================================
+    -- FULLBRIGHT
+    --============================================================
 
     if State.Fullbright then
 
@@ -3208,295 +2882,94 @@ RunService.RenderStepped:Connect(function()
         Lighting.Brightness = 2
     end
 
+    --============================================================
+    -- NO FOG
+    --============================================================
+
     if State.NoFog then
 
         Lighting.FogEnd =
             1000000
     end
 
-    if State.FOVEnabled then
+    --============================================================
+    -- FOV
+    --============================================================
+
+    if State.CustomFOV then
 
         Camera.FieldOfView =
-            State.FOVValue
+            State.FOV
     end
 
-    --==============================================================
-    -- FOV CIRCLE
-    --==============================================================
+    --============================================================
+    -- CROSSHAIR
+    --============================================================
+
+    CrosshairFrame.Position =
+        UDim2.new(
+            0,
+            Camera.ViewportSize.X / 2,
+            0,
+            Camera.ViewportSize.Y / 2
+        )
+
+    --============================================================
+    -- AIM FOV
+    --============================================================
 
     if State.ShowFOVCircle then
 
-        FOVCircle.Position =
+        local Center =
             GetAimPosition()
 
-        FOVCircle.Radius =
-            State.AimbotFOV
+        FOVFrame.Position =
+            UDim2.new(
+                0,
+                Center.X,
+                0,
+                Center.Y
+            )
 
-        FOVCircle.Visible = true
+        FOVFrame.Size =
+            UDim2.new(
+                0,
+                State.AimbotFOV * 2,
+                0,
+                State.AimbotFOV * 2
+            )
+
+        FOVFrame.Visible = true
 
     else
 
-        FOVCircle.Visible = false
+        FOVFrame.Visible = false
     end
 
-    --==============================================================
-    -- CROSSHAIR
-    --==============================================================
-
-    if State.CrosshairEnabled then
-
-        local Center =
-            Vector2.new(
-                Camera.ViewportSize.X / 2,
-                Camera.ViewportSize.Y / 2
-            )
-
-        local Length = 8
-
-        Crosshair.Top.From =
-            Center -
-            Vector2.new(
-                0,
-                3
-            )
-
-        Crosshair.Top.To =
-            Center -
-            Vector2.new(
-                0,
-                3 + Length
-            )
-
-        Crosshair.Bottom.From =
-            Center +
-            Vector2.new(
-                0,
-                3
-            )
-
-        Crosshair.Bottom.To =
-            Center +
-            Vector2.new(
-                0,
-                3 + Length
-            )
-
-        Crosshair.Left.From =
-            Center -
-            Vector2.new(
-                3,
-                0
-            )
-
-        Crosshair.Left.To =
-            Center -
-            Vector2.new(
-                3 + Length,
-                0
-            )
-
-        Crosshair.Right.From =
-            Center +
-            Vector2.new(
-                3,
-                0
-            )
-
-        Crosshair.Right.To =
-            Center +
-            Vector2.new(
-                3 + Length,
-                0
-            )
-
-        for _, Line in pairs(
-            Crosshair
-        ) do
-
-            Line.Visible = true
-        end
-
-    else
-
-        for _, Line in pairs(
-            Crosshair
-        ) do
-
-            Line.Visible = false
-        end
-    end
-
-    --==============================================================
-    -- TRIGGERBOT
-    --==============================================================
-
-    if
-        State.Triggerbot
-        and
-        Mouse.Target
-        and
-        mouse1click
-    then
-
-        local TargetCharacter =
-            Mouse.Target:
-                FindFirstAncestorOfClass(
-                    "Model"
-                )
-
-        if
-            TargetCharacter
-            and
-            TargetCharacter:
-                FindFirstChildOfClass(
-                    "Humanoid"
-                )
-            and
-            Players:
-                GetPlayerFromCharacter(
-                    TargetCharacter
-                ) ~= LocalPlayer
-        then
-
-            mouse1click()
-        end
-    end
-
-    --==============================================================
-    -- ESP / HITBOX
-    --==============================================================
+    --============================================================
+    -- ESP
+    --============================================================
 
     for _, Player in ipairs(
         Players:GetPlayers()
     ) do
 
-        if
-            Player ~= LocalPlayer
-            and
-            Player.Character
-        then
-
-            local TargetCharacter =
-                Player.Character
-
-            local TargetRoot =
-                TargetCharacter:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
-
-            local TargetHumanoid =
-                TargetCharacter:
-                    FindFirstChildOfClass(
-                        "Humanoid"
-                    )
-
-            if TargetRoot then
-
-                if State.HitboxEnabled then
-
-                    TargetRoot.Size =
-                        Vector3.new(
-                            State.HitboxSize,
-                            State.HitboxSize,
-                            State.HitboxSize
-                        )
-
-                    TargetRoot.Transparency =
-                        0.7
-
-                    TargetRoot.Color =
-                        Theme.Accent
-
-                    TargetRoot.Material =
-                        Enum.Material.ForceField
-
-                    TargetRoot.CanCollide =
-                        false
-
-                else
-
-                    TargetRoot.Size =
-                        Vector3.new(
-                            2,
-                            2,
-                            1
-                        )
-
-                    TargetRoot.Transparency =
-                        1
-                end
-            end
-
-            local Highlight =
-                TargetCharacter:
-                    FindFirstChild(
-                        "ArchitectESP"
-                    )
-
-            if
-                State.ESPEnabled
-                and
-                State.ESPBoxes
-            then
-
-                if not Highlight then
-
-                    Highlight =
-                        Instance.new(
-                            "Highlight"
-                        )
-
-                    Highlight.Name =
-                        "ArchitectESP"
-
-                    Highlight.FillColor =
-                        Theme.Accent
-
-                    Highlight.OutlineColor =
-                        Color3.fromRGB(
-                            255,
-                            255,
-                            255
-                        )
-
-                    Highlight.FillTransparency =
-                        0.5
-
-                    Highlight.Parent =
-                        TargetCharacter
-                end
-
-                Highlight.FillColor =
-                    Theme.Accent
-
-            else
-
-                if Highlight then
-                    Highlight:Destroy()
-                end
-            end
+        if Player ~= LocalPlayer then
+            UpdateESP(Player)
         end
     end
 end)
 
---==================================================================
+--==============================================================
 -- AIMBOT
--- EXECUTADO APÓS A CÂMERA
---==================================================================
+--==============================================================
 
 RunService:BindToRenderStep(
     "ArchitectAimbot",
-    Enum.RenderPriority.Camera.Value + 1,
+    Enum.RenderPriority.Camera.Value + 10,
     function()
 
-        RefreshCamera()
-
-        if not Camera then
-            return
-        end
-
-        if not State.AimbotEnabled then
+        if not State.Aimbot then
             return
         end
 
@@ -3510,11 +2983,17 @@ RunService:BindToRenderStep(
             return
         end
 
+        local CameraObject =
+            workspace.CurrentCamera
+
+        if not CameraObject then
+            return
+        end
+
         local AimPosition =
             GetAimPosition()
 
-        local ClosestTarget = nil
-
+        local Target = nil
         local ClosestDistance =
             State.AimbotFOV
 
@@ -3532,14 +3011,12 @@ RunService:BindToRenderStep(
                     Player.Character
 
                 local Humanoid =
-                    Character:
-                    FindFirstChildOfClass(
+                    Character:FindFirstChildOfClass(
                         "Humanoid"
                     )
 
                 local AimPart =
-                    Character:
-                    FindFirstChild(
+                    Character:FindFirstChild(
                         State.AimPart
                     )
 
@@ -3551,21 +3028,24 @@ RunService:BindToRenderStep(
                     AimPart
                 then
 
-                    local ScreenPosition,
-                        OnScreen =
-                        Camera:
-                        WorldToViewportPoint(
-                            AimPart.Position
-                        )
+                    local Position,
+                        Visible =
+                        CameraObject:
+                            WorldToViewportPoint(
+                                AimPart.Position
+                            )
 
-                    if OnScreen then
+                    if Visible then
+
+                        local ScreenPoint =
+                            Vector2.new(
+                                Position.X,
+                                Position.Y
+                            )
 
                         local Distance =
                             (
-                                Vector2.new(
-                                    ScreenPosition.X,
-                                    ScreenPosition.Y
-                                ) -
+                                ScreenPoint -
                                 AimPosition
                             ).Magnitude
 
@@ -3577,7 +3057,7 @@ RunService:BindToRenderStep(
                             ClosestDistance =
                                 Distance
 
-                            ClosestTarget =
+                            Target =
                                 AimPart
                         end
                     end
@@ -3585,89 +3065,41 @@ RunService:BindToRenderStep(
             end
         end
 
-        if not ClosestTarget then
+        if not Target then
             return
         end
 
-        -- Guarda a posição atual da câmera
-        -- e gira somente a direção dela.
         local CameraPosition =
-            Camera.CFrame.Position
+            CameraObject.CFrame.Position
 
         local TargetCFrame =
             CFrame.lookAt(
                 CameraPosition,
-                ClosestTarget.Position
+                Target.Position
             )
 
-        local Smooth =
-            math.clamp(
-                State.AimbotSmoothness,
-                0.01,
-                1
-            )
-
-        Camera.CFrame =
-            Camera.CFrame:Lerp(
+        CameraObject.CFrame =
+            CameraObject.CFrame:Lerp(
                 TargetCFrame,
-                Smooth
+                math.clamp(
+                    State.AimbotSmoothness,
+                    0.01,
+                    1
+                )
             )
     end
 )
 
---==================================================================
--- CHARACTER RESPAWN
---==================================================================
-
-LocalPlayer.CharacterAdded:Connect(function()
-
-    task.wait(1)
-
-    RefreshCamera()
-
-    if State.InfiniteZoom then
-
-        LocalPlayer.CameraMaxZoomDistance =
-            State.ZoomDistance
-    end
-
-    UpdateMouseState(true)
-end)
-
---==================================================================
--- PLAYER REMOVING
---==================================================================
-
-Players.PlayerRemoving:Connect(
-    function(Player)
-
-        local Character =
-            Player.Character
-
-        if Character then
-
-            local Highlight =
-                Character:FindFirstChild(
-                    "ArchitectESP"
-                )
-
-            if Highlight then
-                Highlight:Destroy()
-            end
-        end
-    end
-)
-
---==================================================================
+--==============================================================
 -- INITIALIZATION
---==================================================================
+--==============================================================
 
 MainFrame.Visible = true
 
-UpdateMouseState(true)
+UpdateMouse()
 
 Notify(
     "VOID ARCHITECT",
-    "v4.7 inicializada!"
+    "Sistema inicializado."
 )
 ```
