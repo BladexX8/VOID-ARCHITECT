@@ -1,11 +1,9 @@
 --[[ 
     ====================================================================
-    SYSTEM: VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.0 (OVERLORD REFORGED)
+    SYSTEM: VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.1 (INPUT SLIDERS)
     ENVIRONMENT: Client-Side (LocalScript / Executor)
     DEFAULT TOGGLE KEY: RightControl
-    NEW FEATURES: Advanced ESP (Names/Health/Tracers), FOV Circle, 
-                  Target Lock-on, Waypoint System, Spinbot, FOV/Speed Keybinds,
-                  Bhop, Inf Jump, Anti-Aim, Visual Customization, Rejoin/Server Tools.
+    UPDATED: Sliders agora possuem caixa de texto interativa para digitação manual!
     ====================================================================
 --]]
 
@@ -88,7 +86,7 @@ local State = {
     AimbotSmoothness = 0.2,
     AimbotFOV = 150,
     ShowFOVCircle = false,
-    AimPart = "Head", -- "Head" ou "HumanoidRootPart"
+    AimPart = "Head",
     Triggerbot = false,
 
     -- World / Utilities / Waypoints
@@ -231,7 +229,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(0, 350, 1, 0)
 title.Position = UDim2.new(0, 15, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "VOID // ARCHITECT SUITE v4.0 (OVERLORD)"
+title.Text = "VOID // ARCHITECT SUITE v4.1"
 title.TextColor3 = Theme.Accent
 title.TextSize = 13
 title.Font = Enum.Font.GothamBold
@@ -428,6 +426,9 @@ local function AddToggle(parent, titleText, descText, callback)
     end)
 end
 
+-- ====================================================================
+-- NOVO SLIDER COM INPUT DIGITÁVEL (TEXTBOX INTEGRADA)
+-- ====================================================================
 local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, -4, 0, 52)
@@ -450,16 +451,22 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
     titleLbl.Parent = card
 
-    local valLbl = Instance.new("TextLabel")
-    valLbl.Size = UDim2.new(0.3, 0, 0, 18)
-    valLbl.Position = UDim2.new(0.7, -10, 0, 5)
-    valLbl.BackgroundTransparency = 1
-    valLbl.Text = tostring(defaultVal)
-    valLbl.TextColor3 = Theme.Accent
-    valLbl.TextSize = 11
-    valLbl.Font = Enum.Font.GothamBold
-    valLbl.TextXAlignment = Enum.TextXAlignment.Right
-    valLbl.Parent = card
+    -- Caixa de texto interativa (Agora dá pra digitar!)
+    local valInput = Instance.new("TextBox")
+    valInput.Size = UDim2.new(0, 50, 0, 20)
+    valInput.Position = UDim2.new(1, -60, 0, 4)
+    valInput.BackgroundColor3 = Color3.fromRGB(30, 32, 44)
+    valInput.BorderSizePixel = 0
+    valInput.Text = tostring(defaultVal)
+    valInput.TextColor3 = Theme.Accent
+    valInput.TextSize = 11
+    valInput.Font = Enum.Font.GothamBold
+    valInput.ClearTextOnFocus = false
+    valInput.Parent = card
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = valInput
 
     local sliderTrack = Instance.new("Frame")
     sliderTrack.Size = UDim2.new(1, -20, 0, 5)
@@ -482,19 +489,25 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
     fillCorner.CornerRadius = UDim.new(1, 0)
     fillCorner.Parent = sliderFill
 
+    local function SetValue(value)
+        local clamped = math.clamp(value, minVal, maxVal)
+        valInput.Text = tostring(clamped)
+        local percent = (clamped - minVal) / (maxVal - minVal)
+        sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+        callback(clamped)
+    end
+
     local dragging = false
-    local function UpdateSlider(input)
+    local function UpdateFromMouse(input)
         local pos = math.clamp((input.Position.X - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
         local value = math.floor(minVal + (maxVal - minVal) * pos)
-        sliderFill.Size = UDim2.new(pos, 0, 1, 0)
-        valLbl.Text = tostring(value)
-        callback(value)
+        SetValue(value)
     end
 
     sliderTrack.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            UpdateSlider(input)
+            UpdateFromMouse(input)
         end
     end)
 
@@ -506,7 +519,18 @@ local function AddSlider(parent, titleText, minVal, maxVal, defaultVal, callback
 
     UserInputService.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            UpdateSlider(input)
+            UpdateFromMouse(input)
+        end
+    end)
+
+    -- Atualiza ao terminar de digitar
+    valInput.FocusLost:Connect(function()
+        local num = tonumber(valInput.Text)
+        if num then
+            SetValue(num)
+        else
+            valInput.Text = tostring(minVal)
+            SetValue(minVal)
         end
     end)
 end
@@ -596,7 +620,7 @@ local function AddTextBox(parent, titleText, placeholderText, callback)
 end
 
 -- ====================================================================
--- CRIAÇÃO DAS ABAS DA SUITE v4.0
+-- CRIAÇÃO DAS ABAS DA SUITE v4.1
 -- ====================================================================
 local tabPlayer = CreateTab("Jogador")
 local tabMovement = CreateTab("Movimento")
@@ -861,7 +885,7 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Caches de Desenho de ESP (Tracers e Textos)
+-- Caches de Desenho de ESP
 local espCache = {}
 
 local function CleanupESP(plr)
@@ -1096,4 +1120,4 @@ end)
 -- Limpeza ao sair de jogadores
 Players.PlayerRemoving:Connect(CleanupESP)
 
-Notify("VOID ARCHITECT", "Suite v4.0 inicializada com sucesso. Pressione " .. TOGGLE_KEY.Name .. " para abrir/fechar.")
+Notify("VOID ARCHITECT", "Suite v4.1 (Input Sliders) inicializada com sucesso!")
