@@ -1,16 +1,34 @@
+```lua
 --[[
 ====================================================================
-VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.6
-CLIENT-SIDE
+VOID ARCHITECT // ULTIMATE CLIENT SUITE v4.7
+CLIENT-SIDE / TEST ENVIRONMENT
 
-CORREÇÃO PRINCIPAL:
-- Mouse livre quando o menu está aberto
-- Mouse livre em terceira pessoa
-- Mouse preso somente em primeira pessoa
-- Não força MouseBehavior a cada frame
-- Usa CameraMode para detectar primeira pessoa
-- Aimbot/FOV usam centro da tela em primeira pessoa
-- Mouse real em terceira pessoa
+CORREÇÕES:
+- Aimbot em primeira pessoa
+- Aimbot em terceira pessoa
+- Aimbot executado após a câmera
+- FOV usa centro em primeira pessoa
+- FOV usa mouse em terceira pessoa
+- Mouse livre com painel aberto
+- Mouse escondido somente em primeira pessoa quando fechado
+- Mouse livre em terceira pessoa quando fechado
+- Aimbot Hold Mode
+- Keybind configurável
+- ESP
+- Hitbox
+- Fly
+- Noclip
+- Spin
+- Blink
+- Anti-Fling
+- Infinite Zoom
+- Fullbright
+- No Fog
+- Crosshair
+- FPS Counter
+- Waypoints
+- Anti-AFK
 ====================================================================
 ]]
 
@@ -36,7 +54,7 @@ local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 --==================================================================
--- OLD UI CLEANUP
+-- CLEANUP
 --==================================================================
 
 local OldUI = PlayerGui:FindFirstChild("ArchitectSuiteUI")
@@ -45,17 +63,16 @@ if OldUI then
     OldUI:Destroy()
 end
 
+pcall(function()
+    RunService:UnbindFromRenderStep("ArchitectAimbot")
+end)
+
 --==================================================================
--- SETTINGS
+-- CONFIG
 --==================================================================
 
 local TOGGLE_KEY = Enum.KeyCode.RightControl
-
 local ListeningFor = nil
-
---==================================================================
--- THEME
---==================================================================
 
 local Theme = {
     BG = Color3.fromRGB(10, 11, 16),
@@ -76,7 +93,6 @@ local Theme = {
 local State = {
 
     -- PLAYER
-
     SpeedEnabled = false,
     WalkSpeed = 120,
 
@@ -99,7 +115,6 @@ local State = {
     PlatformStand = false,
 
     -- MOVEMENT
-
     FlyEnabled = false,
     FlySpeed = 80,
 
@@ -116,14 +131,12 @@ local State = {
     AntiFling = false,
 
     -- VISUAL
-
     ESPEnabled = false,
     ESPBoxes = true,
     ESPNames = true,
     ESPTracers = false,
 
     Fullbright = false,
-
     NoFog = false,
 
     FOVEnabled = false,
@@ -134,12 +147,7 @@ local State = {
     FPSCounter = false,
 
     -- COMBAT
-
-    HitboxEnabled = false,
-    HitboxSize = 10,
-
     AimbotEnabled = false,
-
     AimbotHold = false,
     AimbotKey = Enum.KeyCode.LeftAlt,
 
@@ -152,14 +160,15 @@ local State = {
 
     Triggerbot = false,
 
-    -- UTILITY
+    HitboxEnabled = false,
+    HitboxSize = 10,
 
+    -- UTILITY
     AntiAFK = true,
 
     Waypoints = {},
 
     -- ORIGINAL
-
     OriginalGravity = workspace.Gravity,
     OriginalFogEnd = Lighting.FogEnd,
     OriginalAmbient = Lighting.Ambient,
@@ -169,17 +178,26 @@ local State = {
 }
 
 --==================================================================
--- CAMERA
+-- CAMERA HELPERS
 --==================================================================
 
 local function RefreshCamera()
     Camera = workspace.CurrentCamera or Camera
 end
 
--- Versão mais confiável:
--- CameraMode LockFirstPerson = primeira pessoa real.
 local function IsFirstPerson()
-    return LocalPlayer.CameraMode == Enum.CameraMode.LockFirstPerson
+    RefreshCamera()
+
+    local Character = LocalPlayer.Character
+    local Head = Character and Character:FindFirstChild("Head")
+
+    if not Head or not Camera then
+        return false
+    end
+
+    return (
+        Camera.CFrame.Position - Head.Position
+    ).Magnitude < 1.25
 end
 
 local function GetAimPosition()
@@ -216,14 +234,14 @@ local Crosshair = {
 }
 
 for _, Line in pairs(Crosshair) do
-    Line.Color = Color3.fromRGB(255,255,255)
+    Line.Color = Color3.fromRGB(255, 255, 255)
     Line.Thickness = 1.5
     Line.Transparency = 0.8
     Line.Visible = false
 end
 
 --==================================================================
--- SCREEN GUI
+-- GUI
 --==================================================================
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -234,54 +252,27 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
 --==================================================================
--- FPS
+-- FPS LABEL
 --==================================================================
 
 local FPSLabel = Instance.new("TextLabel")
 
-FPSLabel.Name = "FPSCounter"
-
-FPSLabel.Size =
-    UDim2.new(
-        0,
-        140,
-        0,
-        25
-    )
-
-FPSLabel.Position =
-    UDim2.new(
-        0,
-        10,
-        0,
-        10
-    )
-
+FPSLabel.Size = UDim2.new(0, 140, 0, 25)
+FPSLabel.Position = UDim2.new(0, 10, 0, 10)
 FPSLabel.BackgroundTransparency = 1
-
 FPSLabel.Text = "FPS: --"
-
-FPSLabel.TextColor3 =
-    Theme.Accent
-
+FPSLabel.TextColor3 = Theme.Accent
 FPSLabel.TextSize = 12
-
-FPSLabel.Font =
-    Enum.Font.GothamBold
-
-FPSLabel.TextXAlignment =
-    Enum.TextXAlignment.Left
-
+FPSLabel.Font = Enum.Font.GothamBold
+FPSLabel.TextXAlignment = Enum.TextXAlignment.Left
 FPSLabel.Visible = false
-
 FPSLabel.Parent = ScreenGui
 
 --==================================================================
 -- NOTIFICATIONS
 --==================================================================
 
-local NotificationContainer =
-    Instance.new("Frame")
+local NotificationContainer = Instance.new("Frame")
 
 NotificationContainer.Size =
     UDim2.new(
@@ -319,8 +310,7 @@ NotificationLayout.Parent =
 
 local function Notify(TitleText, DescriptionText)
 
-    local Card =
-        Instance.new("Frame")
+    local Card = Instance.new("Frame")
 
     Card.Size =
         UDim2.new(
@@ -334,25 +324,20 @@ local function Notify(TitleText, DescriptionText)
         Theme.Card
 
     Card.BorderSizePixel = 0
-    Card.Parent = NotificationContainer
 
-    local Corner =
-        Instance.new("UICorner")
+    Card.Parent =
+        NotificationContainer
 
-    Corner.CornerRadius =
-        UDim.new(0, 6)
-
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
     Corner.Parent = Card
 
-    local Stroke =
-        Instance.new("UIStroke")
-
+    local Stroke = Instance.new("UIStroke")
     Stroke.Thickness = 1
     Stroke.Color = Theme.Accent
     Stroke.Parent = Card
 
-    local Title =
-        Instance.new("TextLabel")
+    local Title = Instance.new("TextLabel")
 
     Title.Size =
         UDim2.new(
@@ -371,25 +356,14 @@ local function Notify(TitleText, DescriptionText)
         )
 
     Title.BackgroundTransparency = 1
-
-    Title.Text =
-        TitleText
-
-    Title.TextColor3 =
-        Theme.Accent
-
+    Title.Text = TitleText
+    Title.TextColor3 = Theme.Accent
     Title.TextSize = 11
-
-    Title.Font =
-        Enum.Font.GothamBold
-
-    Title.TextXAlignment =
-        Enum.TextXAlignment.Left
-
+    Title.Font = Enum.Font.GothamBold
+    Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Parent = Card
 
-    local Description =
-        Instance.new("TextLabel")
+    local Description = Instance.new("TextLabel")
 
     Description.Size =
         UDim2.new(
@@ -408,21 +382,11 @@ local function Notify(TitleText, DescriptionText)
         )
 
     Description.BackgroundTransparency = 1
-
-    Description.Text =
-        DescriptionText
-
-    Description.TextColor3 =
-        Theme.Text
-
+    Description.Text = DescriptionText
+    Description.TextColor3 = Theme.Text
     Description.TextSize = 10
-
-    Description.Font =
-        Enum.Font.Gotham
-
-    Description.TextXAlignment =
-        Enum.TextXAlignment.Left
-
+    Description.Font = Enum.Font.Gotham
+    Description.TextXAlignment = Enum.TextXAlignment.Left
     Description.Parent = Card
 
     task.delay(3.5, function()
@@ -475,11 +439,9 @@ end
 -- MAIN FRAME
 --==================================================================
 
-local MainFrame =
-    Instance.new("Frame")
+local MainFrame = Instance.new("Frame")
 
-MainFrame.Name =
-    "MainFrame"
+MainFrame.Name = "MainFrame"
 
 MainFrame.Size =
     UDim2.new(
@@ -510,20 +472,13 @@ MainFrame.ClipsDescendants = true
 
 MainFrame.Parent = ScreenGui
 
-local MainCorner =
-    Instance.new("UICorner")
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
 
-MainCorner.CornerRadius =
-    UDim.new(0, 8)
-
-MainCorner.Parent =
-    MainFrame
-
-local MainStroke =
-    Instance.new("UIStroke")
+local MainStroke = Instance.new("UIStroke")
 
 MainStroke.Thickness = 1.2
-
 MainStroke.Color =
     Color3.fromRGB(
         40,
@@ -555,6 +510,7 @@ local function UpdateMouseState(Force)
             and
             FirstPerson == LastFirstPersonState
         then
+
             return
         end
     end
@@ -568,41 +524,37 @@ local function UpdateMouseState(Force)
     -- MENU ABERTO
     if MenuOpen then
 
-        UserInputService.MouseIconEnabled =
-            true
-
         UserInputService.MouseBehavior =
             Enum.MouseBehavior.Default
+
+        UserInputService.MouseIconEnabled = true
 
         return
     end
 
-    -- MENU FECHADO + PRIMEIRA PESSOA
+    -- PRIMEIRA PESSOA
     if FirstPerson then
-
-        UserInputService.MouseIconEnabled =
-            false
 
         UserInputService.MouseBehavior =
             Enum.MouseBehavior.LockCenter
 
+        UserInputService.MouseIconEnabled = false
+
         return
     end
 
-    -- MENU FECHADO + TERCEIRA PESSOA
-    UserInputService.MouseIconEnabled =
-        true
-
+    -- TERCEIRA PESSOA
     UserInputService.MouseBehavior =
         Enum.MouseBehavior.Default
+
+    UserInputService.MouseIconEnabled = true
 end
 
 --==================================================================
 -- HEADER
 --==================================================================
 
-local Header =
-    Instance.new("Frame")
+local Header = Instance.new("Frame")
 
 Header.Size =
     UDim2.new(
@@ -620,8 +572,7 @@ Header.BorderSizePixel = 0
 Header.Parent =
     MainFrame
 
-local Title =
-    Instance.new("TextLabel")
+local Title = Instance.new("TextLabel")
 
 Title.Size =
     UDim2.new(
@@ -642,7 +593,7 @@ Title.Position =
 Title.BackgroundTransparency = 1
 
 Title.Text =
-    "VOID // ARCHITECT SUITE v4.6"
+    "VOID // ARCHITECT SUITE v4.7"
 
 Title.TextColor3 =
     Theme.Accent
@@ -655,7 +606,8 @@ Title.Font =
 Title.TextXAlignment =
     Enum.TextXAlignment.Left
 
-Title.Parent = Header
+Title.Parent =
+    Header
 
 local CloseButton =
     Instance.new("TextButton")
@@ -747,7 +699,8 @@ Sidebar.BackgroundColor3 =
 
 Sidebar.BorderSizePixel = 0
 
-Sidebar.Parent = MainFrame
+Sidebar.Parent =
+    MainFrame
 
 local SidebarLayout =
     Instance.new("UIListLayout")
@@ -755,7 +708,8 @@ local SidebarLayout =
 SidebarLayout.Padding =
     UDim.new(0, 4)
 
-SidebarLayout.Parent = Sidebar
+SidebarLayout.Parent =
+    Sidebar
 
 local SidebarPadding =
     Instance.new("UIPadding")
@@ -769,7 +723,8 @@ SidebarPadding.PaddingLeft =
 SidebarPadding.PaddingRight =
     UDim.new(0, 8)
 
-SidebarPadding.Parent = Sidebar
+SidebarPadding.Parent =
+    Sidebar
 
 --==================================================================
 -- CONTENT
@@ -800,7 +755,7 @@ ContentArea.Parent =
     MainFrame
 
 --==================================================================
--- TAB SYSTEM
+-- TABS
 --==================================================================
 
 local Tabs = {}
@@ -821,7 +776,8 @@ local function CreateTab(Name)
     Button.BackgroundColor3 =
         Theme.Sidebar
 
-    Button.BackgroundTransparency = 1
+    Button.BackgroundTransparency =
+        1
 
     Button.Text =
         "  " .. Name
@@ -837,15 +793,17 @@ local function CreateTab(Name)
     Button.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    Button.Parent = Sidebar
+    Button.Parent =
+        Sidebar
 
-    local Corner =
+    local ButtonCorner =
         Instance.new("UICorner")
 
-    Corner.CornerRadius =
+    ButtonCorner.CornerRadius =
         UDim.new(0, 6)
 
-    Corner.Parent = Button
+    ButtonCorner.Parent =
+        Button
 
     local Scroll =
         Instance.new("ScrollingFrame")
@@ -919,7 +877,8 @@ local function CreateTab(Name)
 
             Tab.Scroll.Visible = false
 
-            Tab.Button.BackgroundTransparency = 1
+            Tab.Button.BackgroundTransparency =
+                1
 
             Tab.Button.TextColor3 =
                 Theme.SubText
@@ -930,7 +889,8 @@ local function CreateTab(Name)
         Button.BackgroundColor3 =
             Theme.Card
 
-        Button.BackgroundTransparency = 0
+        Button.BackgroundTransparency =
+            0
 
         Button.TextColor3 =
             Theme.Accent
@@ -941,7 +901,10 @@ local function CreateTab(Name)
         Scroll = Scroll
     }
 
-    table.insert(Tabs, Data)
+    table.insert(
+        Tabs,
+        Data
+    )
 
     if #Tabs == 1 then
 
@@ -950,7 +913,8 @@ local function CreateTab(Name)
         Button.BackgroundColor3 =
             Theme.Card
 
-        Button.BackgroundTransparency = 0
+        Button.BackgroundTransparency =
+            0
 
         Button.TextColor3 =
             Theme.Accent
@@ -995,7 +959,8 @@ local function AddToggle(
     Corner.CornerRadius =
         UDim.new(0, 6)
 
-    Corner.Parent = Card
+    Corner.Parent =
+        Card
 
     local TitleLabel =
         Instance.new("TextLabel")
@@ -1032,7 +997,8 @@ local function AddToggle(
     TitleLabel.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    TitleLabel.Parent = Card
+    TitleLabel.Parent =
+        Card
 
     local DescriptionLabel =
         Instance.new("TextLabel")
@@ -1053,7 +1019,8 @@ local function AddToggle(
             23
         )
 
-    DescriptionLabel.BackgroundTransparency = 1
+    DescriptionLabel.BackgroundTransparency =
+        1
 
     DescriptionLabel.Text =
         DescriptionText
@@ -1069,7 +1036,8 @@ local function AddToggle(
     DescriptionLabel.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    DescriptionLabel.Parent = Card
+    DescriptionLabel.Parent =
+        Card
 
     local Button =
         Instance.new("TextButton")
@@ -1099,7 +1067,8 @@ local function AddToggle(
 
     Button.Text = ""
 
-    Button.Parent = Card
+    Button.Parent =
+        Card
 
     local ButtonCorner =
         Instance.new("UICorner")
@@ -1107,7 +1076,8 @@ local function AddToggle(
     ButtonCorner.CornerRadius =
         UDim.new(1, 0)
 
-    ButtonCorner.Parent = Button
+    ButtonCorner.Parent =
+        Button
 
     local Indicator =
         Instance.new("Frame")
@@ -1137,7 +1107,8 @@ local function AddToggle(
 
     Indicator.BorderSizePixel = 0
 
-    Indicator.Parent = Button
+    Indicator.Parent =
+        Button
 
     local IndicatorCorner =
         Instance.new("UICorner")
@@ -1238,7 +1209,8 @@ local function AddSlider(
 
     Card.BorderSizePixel = 0
 
-    Card.Parent = Parent
+    Card.Parent =
+        Parent
 
     local Corner =
         Instance.new("UICorner")
@@ -1246,7 +1218,8 @@ local function AddSlider(
     Corner.CornerRadius =
         UDim.new(0, 6)
 
-    Corner.Parent = Card
+    Corner.Parent =
+        Card
 
     local TitleLabel =
         Instance.new("TextLabel")
@@ -1283,7 +1256,8 @@ local function AddSlider(
     TitleLabel.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    TitleLabel.Parent = Card
+    TitleLabel.Parent =
+        Card
 
     local Input =
         Instance.new("TextBox")
@@ -1324,9 +1298,11 @@ local function AddSlider(
     Input.Font =
         Enum.Font.GothamBold
 
-    Input.ClearTextOnFocus = false
+    Input.ClearTextOnFocus =
+        false
 
-    Input.Parent = Card
+    Input.Parent =
+        Card
 
     local InputCorner =
         Instance.new("UICorner")
@@ -1365,7 +1341,8 @@ local function AddSlider(
 
     Track.BorderSizePixel = 0
 
-    Track.Parent = Card
+    Track.Parent =
+        Card
 
     local TrackCorner =
         Instance.new("UICorner")
@@ -1376,10 +1353,16 @@ local function AddSlider(
     TrackCorner.Parent =
         Track
 
-    local Initial =
+    local InitialPercent =
         math.clamp(
-            (DefaultValue - MinValue) /
-            (MaxValue - MinValue),
+            (
+                DefaultValue -
+                MinValue
+            ) /
+            (
+                MaxValue -
+                MinValue
+            ),
             0,
             1
         )
@@ -1389,7 +1372,7 @@ local function AddSlider(
 
     Fill.Size =
         UDim2.new(
-            Initial,
+            InitialPercent,
             0,
             1,
             0
@@ -1400,7 +1383,8 @@ local function AddSlider(
 
     Fill.BorderSizePixel = 0
 
-    Fill.Parent = Track
+    Fill.Parent =
+        Track
 
     local FillCorner =
         Instance.new("UICorner")
@@ -1408,7 +1392,8 @@ local function AddSlider(
     FillCorner.CornerRadius =
         UDim.new(1, 0)
 
-    FillCorner.Parent = Fill
+    FillCorner.Parent =
+        Fill
 
     local function SetValue(Value)
 
@@ -1424,10 +1409,12 @@ local function AddSlider(
 
         local Percent =
             (
-                Value - MinValue
+                Value -
+                MinValue
             ) /
             (
-                MaxValue - MinValue
+                MaxValue -
+                MinValue
             )
 
         Fill.Size =
@@ -1443,86 +1430,85 @@ local function AddSlider(
 
     local Dragging = false
 
-    Track.InputBegan:Connect(function(InputObject)
+    local function UpdateSlider(InputObject)
 
-        if
-            InputObject.UserInputType ==
-            Enum.UserInputType.MouseButton1
-        then
+        if Track.AbsoluteSize.X <= 0 then
+            return
+        end
 
-            Dragging = true
+        local Percent =
+            (
+                InputObject.Position.X -
+                Track.AbsolutePosition.X
+            ) /
+            Track.AbsoluteSize.X
 
-            local Percent =
-                (
-                    InputObject.Position.X -
-                    Track.AbsolutePosition.X
-                ) /
-                Track.AbsoluteSize.X
-
-            Percent =
-                math.clamp(
-                    Percent,
-                    0,
-                    1
-                )
-
-            SetValue(
-                math.floor(
-                    MinValue +
-                    (
-                        MaxValue - MinValue
-                    ) *
-                    Percent
-                )
+        Percent =
+            math.clamp(
+                Percent,
+                0,
+                1
             )
-        end
-    end)
 
-    UserInputService.InputChanged:Connect(function(InputObject)
-
-        if
-            Dragging
-            and
-            InputObject.UserInputType ==
-            Enum.UserInputType.MouseMovement
-        then
-
-            local Percent =
+        local Value =
+            math.floor(
+                MinValue +
                 (
-                    InputObject.Position.X -
-                    Track.AbsolutePosition.X
-                ) /
-                Track.AbsoluteSize.X
-
-            Percent =
-                math.clamp(
-                    Percent,
-                    0,
-                    1
-                )
-
-            SetValue(
-                math.floor(
-                    MinValue +
-                    (
-                        MaxValue - MinValue
-                    ) *
-                    Percent
-                )
+                    MaxValue -
+                    MinValue
+                ) *
+                Percent
             )
+
+        SetValue(Value)
+    end
+
+    Track.InputBegan:Connect(
+        function(InputObject)
+
+            if
+                InputObject.UserInputType ==
+                Enum.UserInputType.MouseButton1
+            then
+
+                Dragging = true
+
+                UpdateSlider(
+                    InputObject
+                )
+            end
         end
-    end)
+    )
 
-    UserInputService.InputEnded:Connect(function(InputObject)
+    UserInputService.InputChanged:Connect(
+        function(InputObject)
 
-        if
-            InputObject.UserInputType ==
-            Enum.UserInputType.MouseButton1
-        then
+            if
+                Dragging
+                and
+                InputObject.UserInputType ==
+                Enum.UserInputType.MouseMovement
+            then
 
-            Dragging = false
+                UpdateSlider(
+                    InputObject
+                )
+            end
         end
-    end)
+    )
+
+    UserInputService.InputEnded:Connect(
+        function(InputObject)
+
+            if
+                InputObject.UserInputType ==
+                Enum.UserInputType.MouseButton1
+            then
+
+                Dragging = false
+            end
+        end
+    )
 
     Input.FocusLost:Connect(function()
 
@@ -1560,7 +1546,8 @@ local function AddButton(
 
     Card.BorderSizePixel = 0
 
-    Card.Parent = Parent
+    Card.Parent =
+        Parent
 
     local Corner =
         Instance.new("UICorner")
@@ -1568,7 +1555,8 @@ local function AddButton(
     Corner.CornerRadius =
         UDim.new(0, 6)
 
-    Corner.Parent = Card
+    Corner.Parent =
+        Card
 
     local Label =
         Instance.new("TextLabel")
@@ -1605,7 +1593,8 @@ local function AddButton(
     Label.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    Label.Parent = Card
+    Label.Parent =
+        Card
 
     local Button =
         Instance.new("TextButton")
@@ -1686,7 +1675,8 @@ local function AddTextBox(
 
     Card.BorderSizePixel = 0
 
-    Card.Parent = Parent
+    Card.Parent =
+        Parent
 
     local Corner =
         Instance.new("UICorner")
@@ -1694,7 +1684,8 @@ local function AddTextBox(
     Corner.CornerRadius =
         UDim.new(0, 6)
 
-    Corner.Parent = Card
+    Corner.Parent =
+        Card
 
     local Label =
         Instance.new("TextLabel")
@@ -1731,7 +1722,8 @@ local function AddTextBox(
     Label.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    Label.Parent = Card
+    Label.Parent =
+        Card
 
     local Input =
         Instance.new("TextBox")
@@ -1777,38 +1769,55 @@ local function AddTextBox(
     Input.Font =
         Enum.Font.Gotham
 
-    Input.Parent = Card
+    Input.Parent =
+        Card
 
-    local BoxCorner =
+    local InputCorner =
         Instance.new("UICorner")
 
-    BoxCorner.CornerRadius =
+    InputCorner.CornerRadius =
         UDim.new(0, 4)
 
-    BoxCorner.Parent = Input
+    InputCorner.Parent =
+        Input
 
-    Input.FocusLost:Connect(function(EnterPressed)
+    Input.FocusLost:Connect(
+        function(EnterPressed)
 
-        if EnterPressed then
+            if EnterPressed then
 
-            Callback(
-                Input.Text
-            )
+                Callback(
+                    Input.Text
+                )
+            end
         end
-    end)
+    )
 end
 
 --==================================================================
 -- TABS
 --==================================================================
 
-local TabPlayer = CreateTab("Jogador")
-local TabMovement = CreateTab("Movimento")
-local TabVisual = CreateTab("Visual & ESP")
-local TabCombat = CreateTab("Combate")
-local TabWaypoints = CreateTab("Waypoints")
-local TabServer = CreateTab("Servidor")
-local TabConfig = CreateTab("Configurações")
+local TabPlayer =
+    CreateTab("Jogador")
+
+local TabMovement =
+    CreateTab("Movimento")
+
+local TabVisual =
+    CreateTab("Visual & ESP")
+
+local TabCombat =
+    CreateTab("Combate")
+
+local TabWaypoints =
+    CreateTab("Waypoints")
+
+local TabServer =
+    CreateTab("Servidor")
+
+local TabConfig =
+    CreateTab("Configurações")
 
 --==================================================================
 -- PLAYER
@@ -1817,10 +1826,11 @@ local TabConfig = CreateTab("Configurações")
 AddToggle(
     TabPlayer,
     "Super Velocidade",
-    "Aumenta sua velocidade.",
+    "Aumenta a velocidade.",
     function(Value)
 
-        State.SpeedEnabled = Value
+        State.SpeedEnabled =
+            Value
     end
 )
 
@@ -1832,17 +1842,19 @@ AddSlider(
     State.WalkSpeed,
     function(Value)
 
-        State.WalkSpeed = Value
+        State.WalkSpeed =
+            Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Super Pulo",
-    "Aumenta a força do pulo.",
+    "Aumenta a força do salto.",
     function(Value)
 
-        State.JumpEnabled = Value
+        State.JumpEnabled =
+            Value
     end
 )
 
@@ -1854,7 +1866,8 @@ AddSlider(
     State.JumpPower,
     function(Value)
 
-        State.JumpPower = Value
+        State.JumpPower =
+            Value
     end
 )
 
@@ -1864,27 +1877,30 @@ AddToggle(
     "Permite pular no ar.",
     function(Value)
 
-        State.InfJump = Value
+        State.InfJump =
+            Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Auto Bhop",
-    "Pula automaticamente.",
+    "Pulo automático.",
     function(Value)
 
-        State.BhopEnabled = Value
+        State.BhopEnabled =
+            Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "God Mode Local",
-    "Mantém a vida cheia.",
+    "Mantém a saúde cheia.",
     function(Value)
 
-        State.GodMode = Value
+        State.GodMode =
+            Value
     end
 )
 
@@ -1894,7 +1910,8 @@ AddToggle(
     "Altera a altura.",
     function(Value)
 
-        State.HipHeightEnabled = Value
+        State.HipHeightEnabled =
+            Value
     end
 )
 
@@ -1906,7 +1923,8 @@ AddSlider(
     State.HipHeightValue,
     function(Value)
 
-        State.HipHeightValue = Value
+        State.HipHeightValue =
+            Value
     end
 )
 
@@ -1916,17 +1934,19 @@ AddToggle(
     "Ctrl + clique.",
     function(Value)
 
-        State.ClickTP = Value
+        State.ClickTP =
+            Value
     end
 )
 
 AddToggle(
     TabPlayer,
     "Infinite Zoom",
-    "Aumenta o zoom máximo.",
+    "Aumenta o zoom.",
     function(Value)
 
-        State.InfiniteZoom = Value
+        State.InfiniteZoom =
+            Value
 
         if Value then
 
@@ -1949,7 +1969,8 @@ AddSlider(
     State.ZoomDistance,
     function(Value)
 
-        State.ZoomDistance = Value
+        State.ZoomDistance =
+            Value
 
         if State.InfiniteZoom then
 
@@ -1965,7 +1986,8 @@ AddToggle(
     "Estado físico livre.",
     function(Value)
 
-        State.PlatformStand = Value
+        State.PlatformStand =
+            Value
     end
 )
 
@@ -2000,7 +2022,8 @@ AddToggle(
     "Movimentação aérea.",
     function(Value)
 
-        State.FlyEnabled = Value
+        State.FlyEnabled =
+            Value
     end
 )
 
@@ -2012,7 +2035,8 @@ AddSlider(
     State.FlySpeed,
     function(Value)
 
-        State.FlySpeed = Value
+        State.FlySpeed =
+            Value
     end
 )
 
@@ -2022,7 +2046,8 @@ AddToggle(
     "Atravessa objetos.",
     function(Value)
 
-        State.NoclipEnabled = Value
+        State.NoclipEnabled =
+            Value
     end
 )
 
@@ -2032,7 +2057,8 @@ AddToggle(
     "Reduz a gravidade.",
     function(Value)
 
-        State.LowGravity = Value
+        State.LowGravity =
+            Value
 
         if not Value then
 
@@ -2050,7 +2076,8 @@ AddSlider(
     State.GravityValue,
     function(Value)
 
-        State.GravityValue = Value
+        State.GravityValue =
+            Value
     end
 )
 
@@ -2060,7 +2087,8 @@ AddToggle(
     "Prende o personagem.",
     function(Value)
 
-        State.BlinkEnabled = Value
+        State.BlinkEnabled =
+            Value
     end
 )
 
@@ -2070,7 +2098,8 @@ AddToggle(
     "Rotação contínua.",
     function(Value)
 
-        State.SpinbotEnabled = Value
+        State.SpinbotEnabled =
+            Value
     end
 )
 
@@ -2082,7 +2111,8 @@ AddSlider(
     State.SpinSpeed,
     function(Value)
 
-        State.SpinSpeed = Value
+        State.SpinSpeed =
+            Value
     end
 )
 
@@ -2092,7 +2122,8 @@ AddToggle(
     "Reduz velocidades extremas.",
     function(Value)
 
-        State.AntiFling = Value
+        State.AntiFling =
+            Value
     end
 )
 
@@ -2106,47 +2137,52 @@ AddToggle(
     "Ativa o ESP.",
     function(Value)
 
-        State.ESPEnabled = Value
+        State.ESPEnabled =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "ESP Boxes",
-    "Destaca os jogadores.",
+    "Destaca jogadores.",
     function(Value)
 
-        State.ESPBoxes = Value
+        State.ESPBoxes =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "ESP Names",
-    "Mostra nome e informações.",
+    "Mostra informações.",
     function(Value)
 
-        State.ESPNames = Value
+        State.ESPNames =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "ESP Tracers",
-    "Linhas até os jogadores.",
+    "Linhas até jogadores.",
     function(Value)
 
-        State.ESPTracers = Value
+        State.ESPTracers =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "Fullbright",
-    "Ilumina o mapa.",
+    "Ilumina o ambiente.",
     function(Value)
 
-        State.Fullbright = Value
+        State.Fullbright =
+            Value
 
         if not Value then
 
@@ -2165,7 +2201,8 @@ AddToggle(
     "Remove a névoa.",
     function(Value)
 
-        State.NoFog = Value
+        State.NoFog =
+            Value
 
         if not Value then
 
@@ -2181,17 +2218,19 @@ AddToggle(
     "Mira fixa.",
     function(Value)
 
-        State.CrosshairEnabled = Value
+        State.CrosshairEnabled =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "Custom FOV",
-    "Altera o campo de visão.",
+    "Altera o FOV.",
     function(Value)
 
-        State.FOVEnabled = Value
+        State.FOVEnabled =
+            Value
 
         if not Value then
 
@@ -2209,19 +2248,22 @@ AddSlider(
     State.FOVValue,
     function(Value)
 
-        State.FOVValue = Value
+        State.FOVValue =
+            Value
     end
 )
 
 AddToggle(
     TabVisual,
     "FPS Counter",
-    "Mostra o FPS.",
+    "Mostra FPS.",
     function(Value)
 
-        State.FPSCounter = Value
+        State.FPSCounter =
+            Value
 
-        FPSLabel.Visible = Value
+        FPSLabel.Visible =
+            Value
     end
 )
 
@@ -2232,20 +2274,29 @@ AddToggle(
 AddToggle(
     TabCombat,
     "Aimbot",
-    "Ativa seleção de alvo.",
+    "Seleciona o alvo mais próximo.",
     function(Value)
 
-        State.AimbotEnabled = Value
+        State.AimbotEnabled =
+            Value
+
+        Notify(
+            "Aimbot",
+            Value and
+                "Ativado" or
+                "Desativado"
+        )
     end
 )
 
 AddToggle(
     TabCombat,
     "Aimbot Hold",
-    "Usa somente enquanto segura uma tecla.",
+    "Só funciona segurando a tecla.",
     function(Value)
 
-        State.AimbotHold = Value
+        State.AimbotHold =
+            Value
     end
 )
 
@@ -2258,7 +2309,8 @@ AimKeyButton =
         State.AimbotKey.Name,
         function()
 
-            ListeningFor = "AIM"
+            ListeningFor =
+                "AIM"
 
             AimKeyButton.Text =
                 "Pressione..."
@@ -2284,7 +2336,8 @@ AddToggle(
     "Mostra a área de seleção.",
     function(Value)
 
-        State.ShowFOVCircle = Value
+        State.ShowFOVCircle =
+            Value
     end
 )
 
@@ -2296,7 +2349,8 @@ AddSlider(
     State.AimbotFOV,
     function(Value)
 
-        State.AimbotFOV = Value
+        State.AimbotFOV =
+            Value
     end
 )
 
@@ -2313,7 +2367,7 @@ AddButton(
 
             Notify(
                 "Aimbot",
-                "Alvo: TORso"
+                "Alvo: TORSO"
             )
 
         else
@@ -2332,20 +2386,22 @@ AddButton(
 AddToggle(
     TabCombat,
     "Triggerbot",
-    "Ação automática sobre alvo.",
+    "Ação automática.",
     function(Value)
 
-        State.Triggerbot = Value
+        State.Triggerbot =
+            Value
     end
 )
 
 AddToggle(
     TabCombat,
     "Hitbox Extender",
-    "Aumenta a área do alvo.",
+    "Aumenta a área.",
     function(Value)
 
-        State.HitboxEnabled = Value
+        State.HitboxEnabled =
+            Value
     end
 )
 
@@ -2357,7 +2413,8 @@ AddSlider(
     State.HitboxSize,
     function(Value)
 
-        State.HitboxSize = Value
+        State.HitboxSize =
+            Value
     end
 )
 
@@ -2473,7 +2530,8 @@ AddToggle(
     "Evita desconexão.",
     function(Value)
 
-        State.AntiAFK = Value
+        State.AntiAFK =
+            Value
     end
 )
 
@@ -2541,16 +2599,13 @@ PanelKeyButton =
         TOGGLE_KEY.Name,
         function()
 
-            ListeningFor = "PANEL"
+            ListeningFor =
+                "PANEL"
 
             PanelKeyButton.Text =
                 "Pressione..."
         end
     )
-
---==================================================================
--- THEMES
---==================================================================
 
 local function CreateTheme(
     Parent,
@@ -2587,6 +2642,11 @@ local function CreateTheme(
                         Color
                 end
             end
+
+            Notify(
+                "Tema",
+                "Aplicado: " .. Name
+            )
         end
     )
 end
@@ -2648,10 +2708,7 @@ CreateTheme(
 UserInputService.InputBegan:Connect(
     function(Input, GameProcessed)
 
-        --===========================================================
-        -- KEYBIND CONFIG
-        --===========================================================
-
+        -- KEYBIND
         if ListeningFor then
 
             if
@@ -2659,7 +2716,9 @@ UserInputService.InputBegan:Connect(
                 Enum.UserInputType.Keyboard
             then
 
-                if ListeningFor == "PANEL" then
+                if ListeningFor ==
+                    "PANEL"
+                then
 
                     TOGGLE_KEY =
                         Input.KeyCode
@@ -2672,7 +2731,9 @@ UserInputService.InputBegan:Connect(
                         "Tecla alterada."
                     )
 
-                elseif ListeningFor == "AIM" then
+                elseif ListeningFor ==
+                    "AIM"
+                then
 
                     State.AimbotKey =
                         Input.KeyCode
@@ -2692,14 +2753,12 @@ UserInputService.InputBegan:Connect(
             return
         end
 
-        --===========================================================
-        -- PANEL TOGGLE
-        --===========================================================
-
+        -- TOGGLE MENU
         if
             not GameProcessed
             and
-            Input.KeyCode == TOGGLE_KEY
+            Input.KeyCode ==
+                TOGGLE_KEY
         then
 
             MainFrame.Visible =
@@ -2720,8 +2779,8 @@ Mouse.Button1Down:Connect(function()
         return
     end
 
-    if
-        not UserInputService:IsKeyDown(
+    if not UserInputService:
+        IsKeyDown(
             Enum.KeyCode.LeftControl
         )
     then
@@ -2737,11 +2796,7 @@ Mouse.Button1Down:Connect(function()
             "HumanoidRootPart"
         )
 
-    if
-        Root
-        and
-        Mouse.Hit
-    then
+    if Root and Mouse.Hit then
 
         Root.CFrame =
             Mouse.Hit +
@@ -2796,14 +2851,20 @@ LocalPlayer.Idled:Connect(function()
     end
 
     VirtualUser:Button2Down(
-        Vector2.new(0, 0),
+        Vector2.new(
+            0,
+            0
+        ),
         Camera.CFrame
     )
 
     task.wait(1)
 
     VirtualUser:Button2Up(
-        Vector2.new(0, 0),
+        Vector2.new(
+            0,
+            0
+        ),
         Camera.CFrame
     )
 end)
@@ -2813,13 +2874,16 @@ end)
 --==================================================================
 
 local FPSFrames = 0
-local FPSStart = os.clock()
+local FPSTime = os.clock()
 
 RunService.RenderStepped:Connect(function()
 
     FPSFrames += 1
 
-    if os.clock() - FPSStart >= 1 then
+    local Now =
+        os.clock()
+
+    if Now - FPSTime >= 1 then
 
         FPSLabel.Text =
             "FPS: " ..
@@ -2828,30 +2892,29 @@ RunService.RenderStepped:Connect(function()
             )
 
         FPSFrames = 0
-
-        FPSStart = os.clock()
+        FPSTime = Now
     end
 end)
 
 --==================================================================
--- CAMERA STATE MONITOR
+-- MOUSE STATE MONITOR
 --==================================================================
 
 RunService.RenderStepped:Connect(function()
 
     RefreshCamera()
 
-    local CurrentFirstPerson =
+    local FirstPerson =
         IsFirstPerson()
 
-    local CurrentMenuState =
+    local MenuOpen =
         MainFrame.Visible
 
     if
-        CurrentFirstPerson ~=
+        FirstPerson ~=
             LastFirstPersonState
         or
-        CurrentMenuState ~=
+        MenuOpen ~=
             LastMenuState
     then
 
@@ -2924,9 +2987,10 @@ RunService.RenderStepped:Connect(function()
             Humanoid.FloorMaterial ~=
                 Enum.Material.Air
             and
-            UserInputService:IsKeyDown(
-                Enum.KeyCode.Space
-            )
+            UserInputService:
+                IsKeyDown(
+                    Enum.KeyCode.Space
+                )
         then
 
             Humanoid:ChangeState(
@@ -2959,7 +3023,11 @@ RunService.RenderStepped:Connect(function()
     -- FLY
     --==============================================================
 
-    if State.FlyEnabled and Root then
+    if
+        State.FlyEnabled
+        and
+        Root
+    then
 
         local Direction =
             Vector3.zero
@@ -3001,7 +3069,11 @@ RunService.RenderStepped:Connect(function()
         ) then
 
             Direction +=
-                Vector3.new(0, 1, 0)
+                Vector3.new(
+                    0,
+                    1,
+                    0
+                )
         end
 
         if UserInputService:IsKeyDown(
@@ -3009,7 +3081,11 @@ RunService.RenderStepped:Connect(function()
         ) then
 
             Direction -=
-                Vector3.new(0, 1, 0)
+                Vector3.new(
+                    0,
+                    1,
+                    0
+                )
         end
 
         Root.Velocity =
@@ -3117,7 +3193,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     --==============================================================
-    -- VISUAL SETTINGS
+    -- VISUAL
     --==============================================================
 
     if State.Fullbright then
@@ -3145,7 +3221,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     --==============================================================
-    -- FOV
+    -- FOV CIRCLE
     --==============================================================
 
     if State.ShowFOVCircle then
@@ -3251,6 +3327,42 @@ RunService.RenderStepped:Connect(function()
     end
 
     --==============================================================
+    -- TRIGGERBOT
+    --==============================================================
+
+    if
+        State.Triggerbot
+        and
+        Mouse.Target
+        and
+        mouse1click
+    then
+
+        local TargetCharacter =
+            Mouse.Target:
+                FindFirstAncestorOfClass(
+                    "Model"
+                )
+
+        if
+            TargetCharacter
+            and
+            TargetCharacter:
+                FindFirstChildOfClass(
+                    "Humanoid"
+                )
+            and
+            Players:
+                GetPlayerFromCharacter(
+                    TargetCharacter
+                ) ~= LocalPlayer
+        then
+
+            mouse1click()
+        end
+    end
+
+    --==============================================================
     -- ESP / HITBOX
     --==============================================================
 
@@ -3269,15 +3381,15 @@ RunService.RenderStepped:Connect(function()
 
             local TargetRoot =
                 TargetCharacter:
-                FindFirstChild(
-                    "HumanoidRootPart"
-                )
+                    FindFirstChild(
+                        "HumanoidRootPart"
+                    )
 
             local TargetHumanoid =
                 TargetCharacter:
-                FindFirstChildOfClass(
-                    "Humanoid"
-                )
+                    FindFirstChildOfClass(
+                        "Humanoid"
+                    )
 
             if TargetRoot then
 
@@ -3318,9 +3430,9 @@ RunService.RenderStepped:Connect(function()
 
             local Highlight =
                 TargetCharacter:
-                FindFirstChild(
-                    "ArchitectESP"
-                )
+                    FindFirstChild(
+                        "ArchitectESP"
+                    )
 
             if
                 State.ESPEnabled
@@ -3361,33 +3473,42 @@ RunService.RenderStepped:Connect(function()
             else
 
                 if Highlight then
-
                     Highlight:Destroy()
                 end
             end
         end
     end
+end)
 
-    --==============================================================
-    -- AIMBOT
-    --==============================================================
+--==================================================================
+-- AIMBOT
+-- EXECUTADO APÓS A CÂMERA
+--==================================================================
 
-    local AimActive =
-        State.AimbotEnabled
+RunService:BindToRenderStep(
+    "ArchitectAimbot",
+    Enum.RenderPriority.Camera.Value + 1,
+    function()
 
-    if
-        State.AimbotEnabled
-        and
-        State.AimbotHold
-    then
+        RefreshCamera()
 
-        AimActive =
-            UserInputService:IsKeyDown(
+        if not Camera then
+            return
+        end
+
+        if not State.AimbotEnabled then
+            return
+        end
+
+        if
+            State.AimbotHold
+            and
+            not UserInputService:IsKeyDown(
                 State.AimbotKey
             )
-    end
-
-    if AimActive then
+        then
+            return
+        end
 
         local AimPosition =
             GetAimPosition()
@@ -3407,24 +3528,27 @@ RunService.RenderStepped:Connect(function()
                 Player.Character
             then
 
-                local AimPart =
-                    Player.Character:
-                    FindFirstChild(
-                        State.AimPart
-                    )
+                local Character =
+                    Player.Character
 
                 local Humanoid =
-                    Player.Character:
+                    Character:
                     FindFirstChildOfClass(
                         "Humanoid"
                     )
 
+                local AimPart =
+                    Character:
+                    FindFirstChild(
+                        State.AimPart
+                    )
+
                 if
-                    AimPart
-                    and
                     Humanoid
                     and
                     Humanoid.Health > 0
+                    and
+                    AimPart
                 then
 
                     local ScreenPosition,
@@ -3461,26 +3585,35 @@ RunService.RenderStepped:Connect(function()
             end
         end
 
-        if ClosestTarget then
-
-            local TargetCFrame =
-                CFrame.new(
-                    Camera.CFrame.Position,
-                    ClosestTarget.Position
-                )
-
-            Camera.CFrame =
-                Camera.CFrame:Lerp(
-                    TargetCFrame,
-                    math.clamp(
-                        State.AimbotSmoothness,
-                        0.01,
-                        1
-                    )
-                )
+        if not ClosestTarget then
+            return
         end
+
+        -- Guarda a posição atual da câmera
+        -- e gira somente a direção dela.
+        local CameraPosition =
+            Camera.CFrame.Position
+
+        local TargetCFrame =
+            CFrame.lookAt(
+                CameraPosition,
+                ClosestTarget.Position
+            )
+
+        local Smooth =
+            math.clamp(
+                State.AimbotSmoothness,
+                0.01,
+                1
+            )
+
+        Camera.CFrame =
+            Camera.CFrame:Lerp(
+                TargetCFrame,
+                Smooth
+            )
     end
-end)
+)
 
 --==================================================================
 -- CHARACTER RESPAWN
@@ -3502,29 +3635,31 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 --==================================================================
--- PLAYER LEAVING
+-- PLAYER REMOVING
 --==================================================================
 
-Players.PlayerRemoving:Connect(function(Player)
+Players.PlayerRemoving:Connect(
+    function(Player)
 
-    local Character =
-        Player.Character
+        local Character =
+            Player.Character
 
-    if Character then
+        if Character then
 
-        local Highlight =
-            Character:FindFirstChild(
-                "ArchitectESP"
-            )
+            local Highlight =
+                Character:FindFirstChild(
+                    "ArchitectESP"
+                )
 
-        if Highlight then
-            Highlight:Destroy()
+            if Highlight then
+                Highlight:Destroy()
+            end
         end
     end
-end)
+)
 
 --==================================================================
--- INITIAL STATE
+-- INITIALIZATION
 --==================================================================
 
 MainFrame.Visible = true
@@ -3533,5 +3668,6 @@ UpdateMouseState(true)
 
 Notify(
     "VOID ARCHITECT",
-    "v4.6 inicializada!"
+    "v4.7 inicializada!"
 )
+```
